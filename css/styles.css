@@ -211,7 +211,7 @@ button {
   justify-content: center;
   touch-action: manipulation;
 }
-#projeto-area { position: relative; }
+#projeto-area { position: relative; flex: 0 0 auto; }
 #projeto-linhas {
   position: absolute;
   left: 0;
