@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Fractal - planeje projetos num formato visual de círculos. Obras, reformas, ideias, listas.">
+  <meta name="theme-color" content="#0B1020">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Fractal">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <title>Fractal - Planejador Visual</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ============ TELA: LISTA DE PROJETOS ============ -->
+  <section id="tela-lista" class="tela ativa">
+    <header class="topbar-lista">
+      <div class="brand">
+        <div class="brand-circulo"></div>
+        <div>
+          <h1>Fractal</h1>
+          <p>Planeje reformas, obras e ideias em círculos</p>
+        </div>
+      </div>
+      <div class="acoes-lista">
+        <button class="btn btn-secundario" id="btn-importar">Importar</button>
+        <button class="btn btn-primario" id="btn-nova-flor">Nova flor</button>
+      </div>
+    </header>
+
+    <div id="lista-container" class="lista-container">
+      <div id="lista-vazia" class="vazio">
+        <div class="vazio-circulo"></div>
+        <p class="vazio-titulo">Nenhum projeto ainda.</p>
+        <p class="vazio-sub">Toque em "Nova flor" para começar a planejar.</p>
+      </div>
+    </div>
+
+    <div id="rodape-lista" class="rodape-lista">
+      <button class="btn btn-texto" id="btn-exportar-tudo">Exportar todos (backup)</button>
+      <span class="sep-rodape">•</span>
+      <button class="btn btn-texto" id="btn-som">Som: ligado</button>
+    </div>
+
+    <input type="file" id="input-importar" accept=".fractal,.json,application/json" hidden>
+  </section>
+
+  <!-- ============ TELA: FLOR (CÍRCULOS) ============ -->
+  <section id="tela-flor" class="tela">
+    <header class="topbar">
+      <button class="btn-icon" id="btn-voltar" title="Voltar" aria-label="Voltar">&#8592;</button>
+      <div class="breadcrumb" id="caminho"></div>
+      <div class="acoes-topo">
+        <button class="btn btn-pequeno btn-secundario" id="btn-anexos">Anexos</button>
+        <button class="btn btn-pequeno btn-secundario" id="btn-exportar">Exportar</button>
+        <button class="btn-icon" id="btn-guardar" title="Guardar" aria-label="Guardar">&#10003;</button>
+      </div>
+    </header>
+    <div class="flor-canvas" id="flor-canvas">
+      <div id="flor-area"></div>
+    </div>
+    <button class="fab" id="btn-novo-item" aria-label="Novo item">+</button>
+  </section>
+
+  <!-- ============ TELA: ANEXOS ============ -->
+  <section id="tela-anexos" class="tela">
+    <header class="topbar">
+      <button class="btn-icon" id="btn-anexos-voltar" title="Voltar" aria-label="Voltar">&#8592;</button>
+      <div class="breadcrumb" id="anexos-titulo"></div>
+      <span></span>
+    </header>
+
+    <div class="barra-anexos">
+      <button class="btn btn-secundario" data-anexo-tipo="imagem">+ Imagem</button>
+      <button class="btn btn-secundario" data-anexo-tipo="video">+ Video</button>
+      <button class="btn btn-secundario" data-anexo-tipo="link">+ Link</button>
+      <button class="btn btn-secundario" data-anexo-tipo="arquivo">+ Arquivo</button>
+    </div>
+
+    <div id="anexos-container" class="anexos-container">
+      <div id="anexos-vazio" class="vazio">
+        <p class="vazio-sub">Nenhum anexo ainda. Adicione fotos, videos, links ou orcamentos.</p>
+      </div>
+    </div>
+
+    <input type="file" id="input-arquivo" hidden>
+  </section>
+
+  <!-- ============ MODAIS ============ -->
+  <div class="modal-overlay" id="modal-overlay" hidden>
+    <div class="modal">
+      <h2 id="modal-titulo"></h2>
+      <div id="modal-corpo"></div>
+      <div class="modal-acoes">
+        <button class="btn btn-secundario" id="modal-cancelar">Cancelar</button>
+        <button class="btn btn-primario" id="modal-ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="sheet-overlay" hidden>
+    <div class="sheet">
+      <h2 id="sheet-titulo"></h2>
+      <div id="sheet-opcoes" class="sheet-opcoes"></div>
+      <button class="btn btn-texto" id="sheet-fechar">Fechar</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <div id="erro-tela" class="erro-tela" hidden></div>
+  <div id="chip-versao" class="chip-versao" hidden></div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
