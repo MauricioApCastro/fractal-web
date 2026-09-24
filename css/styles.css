@@ -457,21 +457,6 @@ textarea.campo { min-height: 110px; resize: vertical; }
 }
 .erro-tela:not([hidden]) { display: block; }
 
-.chip-versao {
-  position: fixed;
-  left: 12px;
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  z-index: 250;
-  background: #123A22;
-  color: #A8F0C4;
-  border: 1px solid #2DA44E;
-  border-radius: 999px;
-  font-size: 11px;
-  padding: 5px 12px;
-  opacity: 0.85;
-}
-.chip-versao:not([hidden]) { display: block; }
-
 @media (max-width: 480px) {
   .brand p { display: none; }
   .acoes-lista .btn { padding: 8px 12px; font-size: 12px; }

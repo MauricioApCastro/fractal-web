@@ -94,14 +94,6 @@ function mostrarErroTela(msg) {
   console.error('[Fractal]', msg);
 }
 
-function mostrarChip() {
-  const el = $('#chip-versao');
-  if (el) {
-    el.textContent = 'funcionando';
-    el.hidden = false;
-  }
-}
-
 window.addEventListener('error', e => {
   mostrarErroTela(String(e.message || 'erro desconhecido') +
     (e.filename ? ' em ' + String(e.filename).split('/').pop() + ':' + e.lineno : ''));
@@ -819,7 +811,6 @@ async function iniciar() {
     mostrarTela('lista');
     renderizarLista();
     document.documentElement.dataset.ready = '1';
-    mostrarChip();
   } catch (err) {
     document.documentElement.dataset.initerr = String(err && err.message || err);
     mostrarErroTela(String(err && err.message || err));
