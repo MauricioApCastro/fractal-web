@@ -803,6 +803,9 @@ function wire() {
   });
 
   window.addEventListener('resize', () => { if (Estado.tela === 'projeto') aplicarEscala(); });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => { if (Estado.tela === 'projeto') aplicarEscala(); });
+  }
 }
 
 /* ============================================================

@@ -40,10 +40,13 @@ button {
 .tela {
   display: none;
   flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 100vh;
   height: 100dvh;
-  position: fixed;
-  inset: 0;
+  overflow: hidden;
 }
 .tela.ativa { display: flex; }
 
@@ -273,6 +276,15 @@ button {
   font-weight: 800;
   opacity: 0.55;
   line-height: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .centro, .item { transition: transform 0.15s ease, filter 0.15s ease; }
+  .centro:hover, .item:hover {
+    z-index: 2;
+    filter: brightness(1.18);
+    transform: scale(1.06);
+  }
 }
 
 /* botão flutuante */
