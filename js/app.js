@@ -265,6 +265,8 @@ function renderizarFlor() {
   area.style.width = lado + 'px';
   area.style.height = lado + 'px';
 
+  const pontos = [];
+
   /* centro */
   const centro = document.createElement('div');
   centro.className = 'centro';
@@ -300,6 +302,7 @@ function renderizarFlor() {
     const ang = (n === 1 ? -90 : -90 + i * 360 / n) * Math.PI / 180;
     const x = cx + raio * Math.cos(ang) - TAM_ITEM / 2;
     const y = cy + raio * Math.sin(ang) - TAM_ITEM / 2;
+    pontos.push({ x: cx + raio * Math.cos(ang), y: cy + raio * Math.sin(ang) });
 
     const [ca, cb] = corDoItem(item.cor);
     const el = document.createElement('div');
@@ -367,7 +370,39 @@ function renderizarFlor() {
     area.appendChild(el);
   });
 
+  /* linhas ligando os círculos (raio centro→itens + anel entre vizinhos) */
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'flor-linhas';
+  svg.setAttribute('width', lado);
+  svg.setAttribute('height', lado);
+  svg.setAttribute('viewBox', '0 0 ' + lado + ' ' + lado);
+  svg.setAttribute('aria-hidden', 'true');
+  pontos.forEach(p => {
+    svg.appendChild(criarLinha(cx, cy, p.x, p.y));
+  });
+  if (pontos.length > 1) {
+    for (let i = 0; i < pontos.length; i++) {
+      const a = pontos[i];
+      const b = pontos[(i + 1) % pontos.length];
+      svg.appendChild(criarLinha(a.x, a.y, b.x, b.y));
+    }
+  }
+  area.insertBefore(svg, area.firstChild);
+
   aplicarEscala();
+}
+
+function criarLinha(x1, y1, x2, y2) {
+  const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  l.setAttribute('x1', x1);
+  l.setAttribute('y1', y1);
+  l.setAttribute('x2', x2);
+  l.setAttribute('y2', y2);
+  l.setAttribute('stroke', '#8B93A7');
+  l.setAttribute('stroke-opacity', '0.45');
+  l.setAttribute('stroke-width', '2');
+  l.setAttribute('stroke-linecap', 'round');
+  return l;
 }
 
 function aplicarEscala() {

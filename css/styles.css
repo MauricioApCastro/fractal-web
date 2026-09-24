@@ -203,9 +203,17 @@ button {
   touch-action: pan-x pan-y;
 }
 #flor-area { position: relative; }
+#flor-linhas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  pointer-events: none;
+}
 
 .centro, .item {
   position: absolute;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
