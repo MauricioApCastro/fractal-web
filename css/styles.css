@@ -270,6 +270,33 @@ button {
 .item.meta-completa { border-color: var(--verde); box-shadow: 0 0 0 1.5px var(--verde); }
 .item .sub-circulo.meta-ok { color: #6EE08C; opacity: 1; font-weight: 600; }
 
+/* ============ CONCLUÍDO ============ */
+.centro.feito, .item.feito {
+  filter: grayscale(0.85) brightness(1.06);
+  border-color: var(--verde);
+}
+.centro.feito .nome-circulo, .item.feito .nome-circulo { text-decoration: line-through; }
+.centro.feito .sub-circulo, .item.feito .sub-circulo { opacity: 0.85; font-weight: 600; }
+.selo-feito {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--verde);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--fundo);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+}
+
 .menu-circulo {
   position: absolute;
   top: 8px;

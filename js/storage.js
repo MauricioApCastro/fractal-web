@@ -85,6 +85,8 @@ function mioloDoJson(d) {
 
   const miolo = novoMiolo(nome);
   miolo.anotacoes = anotacoes || '';
+  miolo.feito = origem.feito != null ? !!origem.feito : origem.Feito != null ? !!origem.Feito : false;
+  miolo.fim = origem.fim || origem.Fim || null;
 
   miolo.itens = (petalasSrc || []).map((p, i) => {
     const cor = p.cor != null ? p.cor : p.Cor != null ? p.Cor : i % 10;
@@ -103,6 +105,8 @@ function mioloDoJson(d) {
       nome: pNome,
       cor: cor,
       anotacoes: p.anotacoes != null ? p.anotacoes : p.Anotacoes != null ? p.Anotacoes : '',
+      feito: p.feito != null ? !!p.feito : p.Feito != null ? !!p.Feito : false,
+      fim: p.fim || p.Fim || null,
       meta: meta,
       miolo: pMiolo ? mioloDoJson(pMiolo) : novoMiolo(pNome),
     };
@@ -125,10 +129,14 @@ function mioloParaJson(m) {
   return {
     Nome: m.nome,
     Anotacoes: m.anotacoes || '',
+    Feito: !!m.feito,
+    Fim: m.fim || null,
     Petalas: (m.itens || []).map(p => ({
       Nome: p.nome,
       Anotacoes: p.anotacoes || '',
       Cor: p.cor,
+      Feito: !!p.feito,
+      Fim: p.fim || null,
       Meta: (p.meta && typeof p.meta.alvo === 'number' && p.meta.alvo > 0)
         ? { Alvo: p.meta.alvo, Dias: (p.meta.dias || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(String(d))).sort() }
         : null,

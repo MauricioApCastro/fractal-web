@@ -88,6 +88,18 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function criarSelo() {
+  const b = document.createElement('span');
+  b.className = 'selo-feito';
+  b.textContent = '\u2713';
+  return b;
+}
+
+function textoConcluido(obj) {
+  const d = obj && obj.fim ? String(obj.fim).slice(0, 10) : '';
+  return d ? 'concluído ' + diaLabel(d) : 'concluído';
+}
+
 /* ============================================================
  * Navegação entre telas
  * ============================================================ */
@@ -282,15 +294,30 @@ function renderizarProjeto() {
   const nAnexos = (miolo.anexos || []).length;
   const csub = document.createElement('div');
   csub.className = 'sub-circulo';
-  csub.textContent = nAnexos > 0
-    ? 'toque p/ editar • ' + nAnexos + ' anexo(s)'
-    : 'toque p/ editar';
+  if (miolo.feito) {
+    csub.textContent = textoConcluido(miolo);
+    centro.classList.add('feito');
+    centro.appendChild(criarSelo());
+  } else {
+    csub.textContent = nAnexos > 0
+      ? 'toque p/ editar • ' + nAnexos + ' anexo(s)'
+      : 'toque p/ editar';
+  }
   centro.appendChild(csub);
 
   centro.addEventListener('click', () => { Som.centro(); editarMiolo(); });
   centro.addEventListener('contextmenu', e => {
     e.preventDefault();
     mostrarSheet('Centro: ' + (miolo.nome || 'Sem nome'), [
+      {
+        texto: miolo.feito ? 'Reabrir centro (não concluído)' : 'Concluir centro',
+        acao: () => {
+          miolo.feito = !miolo.feito;
+          miolo.fim = miolo.feito ? new Date().toISOString() : null;
+          guardar();
+          renderizarProjeto();
+        },
+      },
       { texto: 'Editar centro', acao: () => editarMiolo() },
       { texto: 'Anexos do centro', acao: () => abrirAnexos(null) },
     ]);
@@ -333,6 +360,12 @@ function renderizarProjeto() {
       sub.classList.add('meta-ok');
     }
     el.appendChild(sub);
+
+    if (item.feito) {
+      sub.textContent = textoConcluido(item);
+      el.classList.add('feito');
+      el.appendChild(criarSelo());
+    }
 
     const ordem = document.createElement('span');
     ordem.className = 'menu-circulo';
@@ -440,6 +473,15 @@ function mostrarOpcoesItem(item) {
         guardar();
         renderizarProjeto();
       }),
+    },
+    {
+      texto: item.feito ? 'Reabrir item (não concluído)' : 'Marcar item como concluído',
+      acao: () => {
+        item.feito = !item.feito;
+        item.fim = item.feito ? new Date().toISOString() : null;
+        guardar();
+        renderizarProjeto();
+      },
     },
     {
       texto: metaAtiva(item) ? ('Meta em dias: ' + textoMeta(item)) : 'Definir meta em dias...',
