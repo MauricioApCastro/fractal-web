@@ -370,7 +370,7 @@ function renderizarFlor() {
     area.appendChild(el);
   });
 
-  /* linhas ligando os círculos (raio centro→itens + anel entre vizinhos) */
+  /* linhas ligando o centro aos círculos menores */
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.id = 'flor-linhas';
   svg.setAttribute('width', lado);
@@ -380,13 +380,6 @@ function renderizarFlor() {
   pontos.forEach(p => {
     svg.appendChild(criarLinha(cx, cy, p.x, p.y));
   });
-  if (pontos.length > 1) {
-    for (let i = 0; i < pontos.length; i++) {
-      const a = pontos[i];
-      const b = pontos[(i + 1) % pontos.length];
-      svg.appendChild(criarLinha(a.x, a.y, b.x, b.y));
-    }
-  }
   area.insertBefore(svg, area.firstChild);
 
   aplicarEscala();
