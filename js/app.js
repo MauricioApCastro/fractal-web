@@ -107,23 +107,23 @@ function irParaLista() {
   renderizarLista();
 }
 
-function irParaFlor(projeto) {
+function abrirProjeto(projeto) {
   Estado.atual = projeto;
   Estado.caminho = [projeto.raiz];
-  mostrarTela('flor');
-  renderizarFlor();
+  mostrarTela('projeto');
+  renderizarProjeto();
 }
 
 function entrarItem(item) {
   if (!item.miolo) item.miolo = novoMiolo(item.nome);
   Estado.caminho.push(item.miolo);
-  renderizarFlor();
+  renderizarProjeto();
 }
 
 function voltar() {
   if (Estado.caminho.length > 1) {
     Estado.caminho.pop();
-    renderizarFlor();
+    renderizarProjeto();
     return;
   }
   irParaLista();
@@ -202,7 +202,7 @@ function renderizarLista() {
     el.addEventListener('click', () => {
       Storage.carregarProjeto(proj.id).then(carregado => {
         if (!carregado) { toast('Projeto não encontrado.'); recarregarProjetos(); return; }
-        irParaFlor(carregado);
+        abrirProjeto(carregado);
       });
     });
     el.addEventListener('contextmenu', e => {
@@ -233,7 +233,7 @@ async function recarregarProjetos() {
 const TAM_ITEM = 118;
 const TAM_CENTRO = 160;
 
-function renderizarFlor() {
+function renderizarProjeto() {
   const miolo = mioloAtual();
   if (!miolo) return;
 
@@ -251,7 +251,7 @@ function renderizarFlor() {
     crumb.appendChild(b);
   });
 
-  const area = $('#flor-area');
+  const area = $('#projeto-area');
   area.innerHTML = '';
 
   const n = miolo.itens.length;
@@ -372,7 +372,7 @@ function renderizarFlor() {
 
   /* linhas ligando o centro aos círculos menores */
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.id = 'flor-linhas';
+  svg.id = 'projeto-linhas';
   svg.setAttribute('width', lado);
   svg.setAttribute('height', lado);
   svg.setAttribute('viewBox', '0 0 ' + lado + ' ' + lado);
@@ -399,8 +399,8 @@ function criarLinha(x1, y1, x2, y2) {
 }
 
 function aplicarEscala() {
-  const canvasEl = $('#flor-canvas');
-  const area = $('#flor-area');
+  const canvasEl = $('#projeto-canvas');
+  const area = $('#projeto-area');
   const dispW = canvasEl.clientWidth - 16;
   const dispH = canvasEl.clientHeight - 16;
   let escala = dispW / Estado.ladoCanvas;
@@ -419,7 +419,7 @@ function editarMiolo() {
     miolo.nome = nome;
     miolo.anotacoes = notas;
     guardar();
-    renderizarFlor();
+    renderizarProjeto();
   });
 }
 
@@ -432,7 +432,7 @@ function mostrarOpcoesItem(item) {
         item.nome = n;
         item.anotacoes = notas;
         guardar();
-        renderizarFlor();
+        renderizarProjeto();
       }),
     },
     { texto: 'Anexos', acao: () => abrirAnexos(item) },
@@ -443,7 +443,7 @@ function mostrarOpcoesItem(item) {
         const miolo = mioloAtual();
         miolo.itens = miolo.itens.filter(i => i !== item);
         guardar();
-        renderizarFlor();
+        renderizarProjeto();
         toast('Item apagado.');
       }),
     },
@@ -455,7 +455,7 @@ function novoItemFluxo() {
     const miolo = mioloAtual();
     miolo.itens.push(novoItem(nome.trim(), miolo.itens.length));
     guardar();
-    renderizarFlor();
+    renderizarProjeto();
   });
 }
 
@@ -750,8 +750,8 @@ function importarFluxo() {
  * ============================================================ */
 
 function wire() {
-  $('#btn-nova-flor').addEventListener('click', () => {
-    prompt('Nova flor', 'Dê um nome ao centro desta flor:', 'Ex.: Reforma', 'Reforma', async nome => {
+  $('#btn-novo-projeto').addEventListener('click', () => {
+    prompt('Novo projeto', 'Dê um nome ao centro deste projeto:', 'Ex.: Reforma', 'Reforma', async nome => {
       const projeto = {
         id: novoId(),
         nome: nome.trim(),
@@ -760,7 +760,7 @@ function wire() {
       };
       await Storage.salvarProjeto(projeto);
       await recarregarProjetos();
-      irParaFlor(projeto);
+      abrirProjeto(projeto);
     });
   });
 
@@ -781,8 +781,8 @@ function wire() {
     toast('Guardado.');
   });
   $('#btn-anexos-voltar').addEventListener('click', () => {
-    mostrarTela('flor');
-    renderizarFlor();
+    mostrarTela('projeto');
+    renderizarProjeto();
   });
 
   document.querySelectorAll('[data-anexo-tipo]').forEach(b => {
@@ -799,10 +799,10 @@ function wire() {
     if (e.key !== 'Escape') return;
     if (!$('#sheet-overlay').hidden) fecharSheet();
     else if (!$('#modal-overlay').hidden) resolverModal(null);
-    else if (Estado.tela === 'flor') voltar();
+    else if (Estado.tela === 'projeto') voltar();
   });
 
-  window.addEventListener('resize', () => { if (Estado.tela === 'flor') aplicarEscala(); });
+  window.addEventListener('resize', () => { if (Estado.tela === 'projeto') aplicarEscala(); });
 }
 
 /* ============================================================

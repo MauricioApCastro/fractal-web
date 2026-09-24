@@ -193,7 +193,7 @@ button {
 }
 
 /* ============ FLOR ============ */
-.flor-canvas {
+.projeto-canvas {
   flex: 1;
   overflow: auto;
   position: relative;
@@ -202,8 +202,8 @@ button {
   justify-content: center;
   touch-action: pan-x pan-y;
 }
-#flor-area { position: relative; }
-#flor-linhas {
+#projeto-area { position: relative; }
+#projeto-linhas {
   position: absolute;
   left: 0;
   top: 0;
