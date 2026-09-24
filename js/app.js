@@ -255,9 +255,9 @@ function renderizarFlor() {
   area.innerHTML = '';
 
   const n = miolo.itens.length;
-  let raio = 172;
-  if (n > 8) raio += (n - 8) * 24;
-  const lado = Math.max(660, Math.ceil((raio + TAM_ITEM / 2 + 46) * 2));
+  const raioMin = TAM_CENTRO / 2 + TAM_ITEM / 2 + 26;
+  let raio = n <= 2 ? raioMin + 14 : raioMin + n * 10;
+  const lado = Math.max(400, Math.ceil((raio + TAM_ITEM / 2 + 46) * 2));
   const cx = lado / 2;
   const cy = lado / 2;
   Estado.ladoCanvas = lado;
@@ -401,9 +401,11 @@ function criarLinha(x1, y1, x2, y2) {
 function aplicarEscala() {
   const canvasEl = $('#flor-canvas');
   const area = $('#flor-area');
-  const disponivel = canvasEl.clientWidth - 16;
-  const escala = Math.max(0.3, Math.min(1, disponivel / Estado.ladoCanvas));
-  area.style.transform = 'scale(' + escala + ')';
+  const dispW = canvasEl.clientWidth - 16;
+  const dispH = canvasEl.clientHeight - 16;
+  let escala = dispW / Estado.ladoCanvas;
+  if (dispH > 0) escala = Math.min(escala, dispH / Estado.ladoCanvas);
+  area.style.transform = 'scale(' + Math.max(0.15, Math.min(3.5, escala)) + ')';
   area.style.transformOrigin = 'center center';
 }
 
