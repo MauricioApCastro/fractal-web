@@ -90,10 +90,20 @@ function mioloDoJson(d) {
     const cor = p.cor != null ? p.cor : p.Cor != null ? p.Cor : i % 10;
     const pNome = p.nome != null ? p.nome : p.Nome != null ? p.Nome : 'Sem nome';
     const pMiolo = p.miolo || p.Miolo;
+    const pMeta = p.meta || p.Meta;
+    const meta = (pMeta && pMeta.alvo)
+      ? {
+          alvo: Math.max(1, Math.min(3650, parseInt(pMeta.alvo, 10) || 30)),
+          dias: Array.isArray(pMeta.dias)
+            ? pMeta.dias.filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)).sort()
+            : [],
+        }
+      : undefined;
     return {
       nome: pNome,
       cor: cor,
       anotacoes: p.anotacoes != null ? p.anotacoes : p.Anotacoes != null ? p.Anotacoes : '',
+      meta: meta,
       miolo: pMiolo ? mioloDoJson(pMiolo) : novoMiolo(pNome),
     };
   });
@@ -119,6 +129,9 @@ function mioloParaJson(m) {
       Nome: p.nome,
       Anotacoes: p.anotacoes || '',
       Cor: p.cor,
+      Meta: (p.meta && typeof p.meta.alvo === 'number' && p.meta.alvo > 0)
+        ? { Alvo: p.meta.alvo, Dias: (p.meta.dias || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(String(d))).sort() }
+        : null,
       Miolo: p.miolo ? mioloParaJson(p.miolo) : null,
     })),
     Anexos: (m.anexos || []).map(a => ({

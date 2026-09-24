@@ -318,14 +318,20 @@ function renderizarProjeto() {
 
     const subItens = item.miolo ? item.miolo.itens.length : 0;
     const subAnexos = item.miolo ? item.miolo.anexos.length : 0;
-    let subTxt = '';
-    if (subItens > 0 && subAnexos > 0) subTxt = subItens + ' filho(s) • ' + subAnexos;
-    else if (subAnexos > 0) subTxt = subAnexos + ' anexo(s)';
-    else if (subItens > 0) subTxt = subItens + ' filho(s)';
+    let subTxt = textoMeta(item);
+    const resto =
+      (subItens > 0 && subAnexos > 0) ? subItens + ' filho(s) • ' + subAnexos :
+      subAnexos > 0 ? subAnexos + ' anexo(s)' :
+      subItens > 0 ? subItens + ' filho(s)' : '';
+    if (resto) subTxt = subTxt ? subTxt + ' • ' + resto : resto;
 
     const sub = document.createElement('div');
     sub.className = 'sub-circulo';
     sub.textContent = subTxt;
+    if (metaCompleta(item)) {
+      el.classList.add('meta-completa');
+      sub.classList.add('meta-ok');
+    }
     el.appendChild(sub);
 
     const ordem = document.createElement('span');
@@ -434,6 +440,10 @@ function mostrarOpcoesItem(item) {
         guardar();
         renderizarProjeto();
       }),
+    },
+    {
+      texto: metaAtiva(item) ? ('Meta em dias: ' + textoMeta(item)) : 'Definir meta em dias...',
+      acao: () => gerenciarMeta(item),
     },
     { texto: 'Anexos', acao: () => abrirAnexos(item) },
     {
@@ -691,6 +701,130 @@ function mostrarSheet(titulo, opcoes) {
 
 function fecharSheet() {
   $('#sheet-overlay').hidden = true;
+}
+
+/* ============================================================
+ * META EM DIAS (prazo / meta diária dos itens)
+ *  item.meta = { alvo: n dias, dias: ['YYYY-MM-DD', ...] }
+ * ============================================================ */
+
+function metaAtiva(item) {
+  return (item.meta && typeof item.meta.alvo === 'number' && item.meta.alvo > 0) ? item.meta : null;
+}
+
+function ordenarDias(meta) {
+  if (!Array.isArray(meta.dias)) meta.dias = [];
+  meta.dias = meta.dias
+    .filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort();
+  return meta.dias;
+}
+
+function hojeISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
+function diaLabel(iso) {
+  const p = String(iso || '').split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] : String(iso || '');
+}
+
+function metaFeitos(item) {
+  const m = metaAtiva(item);
+  return m && Array.isArray(m.dias) ? m.dias.length : 0;
+}
+
+function textoMeta(item) {
+  const m = metaAtiva(item);
+  if (!m) return '';
+  return metaFeitos(item) + '/' + m.alvo + ' dias';
+}
+
+function metaCompleta(item) {
+  const m = metaAtiva(item);
+  return !!(m && metaFeitos(item) >= m.alvo);
+}
+
+function gerenciarMeta(item) {
+  const m = (item.meta && typeof item.meta.alvo === 'number' && item.meta.alvo > 0)
+    ? item.meta
+    : (item.meta = { alvo: 30, dias: [] });
+  m.alvo = Math.round(Math.max(1, Math.min(3650, m.alvo || 30)));
+
+  abrirModal('Meta em dias', '', 'Fechar').then(() => {
+    renderizarProjeto();
+  });
+  pintarMeta(item);
+}
+
+function pintarMeta(item) {
+  const m = item.meta;
+  ordenarDias(m);
+  const feitos = m.dias.length;
+  const hoje = hojeISO();
+  const marcHoje = m.dias.includes(hoje);
+  const pct = Math.min(100, Math.round(feitos / m.alvo * 100));
+  const falta = Math.max(0, m.alvo - feitos);
+
+  $('#modal-titulo').textContent = 'Meta em dias';
+  $('#modal-ok').textContent = 'Fechar';
+  $('#modal-ok').className = 'btn btn-primario';
+
+  $('#modal-corpo').innerHTML =
+    '<div class="meta-status">' + feitos + ' de ' + m.alvo + ' dias' +
+      (falta > 0 ? ' (falta ' + falta + ')' : ' • concluída') + '</div>' +
+    '<div class="meta-barra"><div class="meta-barra-fill" style="width:' + pct + '%"></div></div>' +
+    '<button class="btn btn-primario btn-marcar-hoje" id="m-marcar">' +
+      (marcHoje ? 'Desmarcar hoje (já marcado)' : 'Marcar dia de hoje') + '</button>' +
+    '<label for="m-alvo">Meta (dias)</label>' +
+    '<div class="linha-meta">' +
+      '<input class="campo" id="m-alvo" type="number" inputmode="numeric" min="1" max="3650" value="' + m.alvo + '">' +
+      '<button class="btn btn-secundario" id="m-aplicar">Aplicar</button>' +
+    '</div>' +
+    (m.dias.length
+      ? '<div class="meta-dias">' + m.dias.map(d =>
+          '<span class="meta-dia-chip">' + diaLabel(d) +
+          '<button type="button" data-dia="' + d + '" title="Desmarcar dia">' + '\u00D7' + '</button></span>'
+        ).join('') + '</div>'
+      : '<p class="meta-ajuda">Toque em "Marcar dia de hoje" todos os dias.</p>') +
+    '<button class="btn btn-texto" id="m-remover">Remover meta deste item</button>';
+
+  $('#m-marcar').addEventListener('click', () => {
+    if (marcHoje) m.dias = m.dias.filter(d => d !== hoje);
+    else m.dias.push(hoje);
+    guardar();
+    pintarMeta(item);
+  });
+
+  $('#m-aplicar').addEventListener('click', () => {
+    const v = parseInt(($('#m-alvo').value || '').trim(), 10);
+    if (!isNaN(v) && v >= 1 && v <= 3650) {
+      m.alvo = v;
+      guardar();
+      pintarMeta(item);
+    } else {
+      toast('Informe dias entre 1 e 3650.');
+    }
+  });
+
+  $('#m-alvo').addEventListener('keydown', e => { if (e.key === 'Enter') $('#m-aplicar').click(); });
+
+  document.querySelectorAll('#modal-corpo [data-dia]').forEach(b => {
+    b.addEventListener('click', () => {
+      m.dias = m.dias.filter(d => d !== b.dataset.dia);
+      guardar();
+      pintarMeta(item);
+    });
+  });
+
+  $('#m-remover').addEventListener('click', () => {
+    item.meta = null;
+    guardar();
+    resolverModal('ok');
+  });
 }
 
 /* ============================================================
