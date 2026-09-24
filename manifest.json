@@ -1,7 +1,7 @@
 {
-  "name": "Fractal - Planejador Visual",
-  "short_name": "Fractal",
-  "description": "Planeje reformas, obras e ideias num formato visual de círculos, com anexos.",
+  "name": "Planejamento e idéias em círculos",
+  "short_name": "Círculos",
+  "description": "Planeje projetos em círculos: reformas, obras, ideias e listas, com anexos.",
   "lang": "pt-BR",
   "start_url": ".",
   "scope": ".",

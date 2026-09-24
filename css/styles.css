@@ -12,7 +12,7 @@
   --vinho: #C21E1E;
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
 html, body {
   margin: 0;
@@ -21,9 +21,14 @@ html, body {
   background: var(--fundo);
   color: var(--texto);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: none;
 }
 
 body { overflow: hidden; }
+
+/* sem barras de rolagem visíveis */
+* { scrollbar-width: none; -ms-overflow-style: none; }
+::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 button {
   font-family: inherit;
@@ -65,8 +70,8 @@ button {
   border-bottom: 1px solid var(--borda);
 }
 
-.brand { display: flex; align-items: center; gap: 12px; }
-.brand h1 { margin: 0; font-size: 22px; letter-spacing: 0.5px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand h1 { margin: 0; font-size: clamp(15px, 4.5vw, 22px); line-height: 1.15; letter-spacing: 0.5px; }
 .brand p { margin: 2px 0 0; font-size: 12px; color: var(--texto-fraco); }
 
 .brand-circulo {
@@ -192,15 +197,16 @@ button {
   border-top: 1px solid var(--borda);
 }
 
-/* ============ FLOR ============ */
+/* ============ CÍRCULOS ============ */
 .projeto-canvas {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  touch-action: pan-x pan-y;
+  touch-action: manipulation;
 }
 #projeto-area { position: relative; }
 #projeto-linhas {
@@ -448,5 +454,6 @@ textarea.campo { min-height: 110px; resize: vertical; }
 
 @media (max-width: 480px) {
   .brand p { display: none; }
+  .brand h1 { font-size: 14px; }
   .acoes-lista .btn { padding: 8px 12px; font-size: 12px; }
 }
