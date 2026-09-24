@@ -438,25 +438,6 @@ textarea.campo { min-height: 110px; resize: vertical; }
 }
 .toast:not([hidden]) { display: block; animation: sobe 0.15s ease-out; }
 
-/* ============ DIAGNÓSTICO ============ */
-.erro-tela {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 300;
-  background: #7A1C1C;
-  color: #FFE3E3;
-  font-size: 13px;
-  padding: 10px 14px;
-  padding-top: calc(10px + env(safe-area-inset-top, 0px));
-  border-bottom: 1px solid #FF7B7B;
-  word-break: break-word;
-  max-height: 40vh;
-  overflow-y: auto;
-}
-.erro-tela:not([hidden]) { display: block; }
-
 @media (max-width: 480px) {
   .brand p { display: none; }
   .acoes-lista .btn { padding: 8px 12px; font-size: 12px; }

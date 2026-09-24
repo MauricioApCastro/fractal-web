@@ -82,27 +82,6 @@ const Som = (() => {
   };
 })();
 
-/* ============================================================
- * Diagnóstico em tela: mostra NÃO-inicializações/erros de JS
- * ============================================================ */
-
-function mostrarErroTela(msg) {
-  const el = $('#erro-tela');
-  if (!el) return;
-  el.textContent = 'Erro no app: ' + msg;
-  el.hidden = false;
-  console.error('[Fractal]', msg);
-}
-
-window.addEventListener('error', e => {
-  mostrarErroTela(String(e.message || 'erro desconhecido') +
-    (e.filename ? ' em ' + String(e.filename).split('/').pop() + ':' + e.lineno : ''));
-});
-window.addEventListener('unhandledrejection', e => {
-  const r = e && e.reason;
-  mostrarErroTela('Promise: ' + ((r && r.message) || r || 'rejeição sem detalhe'));
-});
-
 function escapeHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -813,7 +792,7 @@ async function iniciar() {
     document.documentElement.dataset.ready = '1';
   } catch (err) {
     document.documentElement.dataset.initerr = String(err && err.message || err);
-    mostrarErroTela(String(err && err.message || err));
+    console.error('[Fractal]', err);
   }
 }
 
