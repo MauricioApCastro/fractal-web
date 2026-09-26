@@ -11,10 +11,21 @@ const Estado = {
   projetos: [],
   atual: null,        // projeto em uso
   caminho: [],        // pilha de miolos (raiz primeiro)
+  itemPai: null,      // item que originou o miolo atual
   anexosDe: null,     // miolo cujos anexos estão abertos
   anexosTitulo: '',
   tela: 'lista',
-  ladoCanvas: 660,
+  larguraCanvas: 208,
+  alturaCanvas: 208,
+  quantidadeItens: null,
+  zoomUsuario: 1,
+  escalaAplicada: 1,
+  escalaTelaAplicada: 1,
+  limiteEscalaTela: null,
+  panX: 0,
+  panY: 0,
+  arrastouFlor: false,
+  observadorTamanho: null,
 };
 
 function mioloAtual() {
@@ -82,22 +93,31 @@ const Som = (() => {
   };
 })();
 
+/* ============================================================
+ * Diagnóstico em tela: mostra NÃO-inicializações/erros de JS
+ * ============================================================ */
+
+function mostrarErroTela(msg) {
+  const el = $('#erro-tela');
+  if (!el) return;
+  el.textContent = 'Erro no app: ' + msg;
+  el.hidden = false;
+  console.error('[Fractal]', msg);
+}
+
+window.addEventListener('error', e => {
+  mostrarErroTela(String(e.message || 'erro desconhecido') +
+    (e.filename ? ' em ' + String(e.filename).split('/').pop() + ':' + e.lineno : ''));
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e && e.reason;
+  mostrarErroTela('Promise: ' + ((r && r.message) || r || 'rejeição sem detalhe'));
+});
+
 function escapeHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function criarSelo() {
-  const b = document.createElement('span');
-  b.className = 'selo-feito';
-  b.textContent = '\u2713';
-  return b;
-}
-
-function textoConcluido(obj) {
-  const d = obj && obj.fim ? String(obj.fim).slice(0, 10) : '';
-  return d ? 'concluído ' + diaLabel(d) : 'concluído';
 }
 
 /* ============================================================
@@ -114,28 +134,45 @@ function mostrarTela(nome) {
 function irParaLista() {
   Estado.atual = null;
   Estado.caminho = [];
+  Estado.itemPai = null;
   Estado.anexosDe = null;
   mostrarTela('lista');
   renderizarLista();
 }
 
-function abrirProjeto(projeto) {
+function resetarZoomFlor() {
+  Estado.quantidadeItens = null;
+  Estado.zoomUsuario = 1;
+  Estado.escalaAplicada = 0;
+  Estado.escalaTelaAplicada = 1;
+  Estado.limiteEscalaTela = null;
+  Estado.panX = 0;
+  Estado.panY = 0;
+}
+
+function irParaFlor(projeto) {
   Estado.atual = projeto;
   Estado.caminho = [projeto.raiz];
-  mostrarTela('projeto');
-  renderizarProjeto();
+  Estado.itemPai = null;
+  resetarZoomFlor();
+  mostrarTela('flor');
+  renderizarFlor();
 }
 
 function entrarItem(item) {
   if (!item.miolo) item.miolo = novoMiolo(item.nome);
   Estado.caminho.push(item.miolo);
-  renderizarProjeto();
+  Estado.itemPai = item;
+  resetarZoomFlor();
+  renderizarFlor();
 }
 
 function voltar() {
   if (Estado.caminho.length > 1) {
     Estado.caminho.pop();
-    renderizarProjeto();
+    Estado.itemPai = null;
+    resetarZoomFlor();
+    renderizarFlor();
     return;
   }
   irParaLista();
@@ -214,7 +251,7 @@ function renderizarLista() {
     el.addEventListener('click', () => {
       Storage.carregarProjeto(proj.id).then(carregado => {
         if (!carregado) { toast('Projeto não encontrado.'); recarregarProjetos(); return; }
-        abrirProjeto(carregado);
+        irParaFlor(carregado);
       });
     });
     el.addEventListener('contextmenu', e => {
@@ -239,15 +276,70 @@ async function recarregarProjetos() {
 }
 
 /* ============================================================
- * CÍRCULOS
+ * FLOR (CÍRCULOS)
  * ============================================================ */
 
 const TAM_ITEM = 118;
 const TAM_CENTRO = 160;
 
-function renderizarProjeto() {
+function dataLocalISO(data = new Date()) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  const dia = String(data.getDate()).padStart(2, '0');
+  return ano + '-' + mes + '-' + dia;
+}
+
+function somarDias(dataISO, dias) {
+  const data = new Date(dataISO + 'T12:00:00');
+  data.setDate(data.getDate() + dias);
+  return dataLocalISO(data);
+}
+
+function normalizarMeta(meta) {
+  if (!meta) return null;
+  const dias = Math.max(1, Math.min(3650, Math.floor(Number(meta.dias) || 30)));
+  const progresso = Math.max(0, Math.min(dias, Math.floor(Number(meta.progresso) || 0)));
+  const inicioBruto = meta.inicio || dataLocalISO();
+  const dataInicio = /^\d{4}-\d{2}-\d{2}$/.test(inicioBruto)
+    ? new Date(inicioBruto + 'T12:00:00')
+    : new Date(inicioBruto);
+  const inicio = isNaN(dataInicio.getTime()) ? dataLocalISO() : dataLocalISO(dataInicio);
+  const prazoBruto = meta.prazo || '';
+  const dataPrazo = prazoBruto
+    ? (/^\d{4}-\d{2}-\d{2}$/.test(prazoBruto) ? new Date(prazoBruto + 'T12:00:00') : new Date(prazoBruto))
+    : null;
+  const prazo = dataPrazo && !isNaN(dataPrazo.getTime()) ? dataLocalISO(dataPrazo) : somarDias(inicio, dias);
+  return {
+    dias,
+    progresso,
+    inicio,
+    prazo,
+  };
+}
+
+function criarMeta(dias, inicio) {
+  return normalizarMeta({ dias, progresso: 0, inicio });
+}
+
+function formatarDataMeta(dataISO) {
+  if (!dataISO) return '';
+  const data = new Date(dataISO + 'T12:00:00');
+  if (isNaN(data.getTime())) return '';
+  return data.toLocaleDateString('pt-BR');
+}
+
+function itemConcluido(item) {
+  const meta = normalizarMeta(item.meta);
+  return item.concluido === true || (meta && meta.progresso >= meta.dias);
+}
+
+function renderizarFlor() {
   const miolo = mioloAtual();
   if (!miolo) return;
+  const metaAtiva = Estado.itemPai && miolo === Estado.itemPai.miolo
+    ? normalizarMeta(Estado.itemPai.meta)
+    : null;
+  renderizarControleMeta(metaAtiva);
 
   /* breadcrumb */
   const crumb = $('#caminho');
@@ -263,25 +355,67 @@ function renderizarProjeto() {
     crumb.appendChild(b);
   });
 
-  const area = $('#projeto-area');
+  const area = $('#flor-area');
   area.innerHTML = '';
 
   const n = miolo.itens.length;
-  const raioMin = TAM_CENTRO / 2 + TAM_ITEM / 2 + 26;
-  let raio = n <= 2 ? raioMin + 14 : raioMin + n * 10;
-  const lado = Math.max(400, Math.ceil((raio + TAM_ITEM / 2 + 46) * 2));
-  const cx = lado / 2;
-  const cy = lado / 2;
-  Estado.ladoCanvas = lado;
+  const nConcluidos = miolo.itens.reduce((total, item) => total + (itemConcluido(item) ? 1 : 0), 0);
+  const quantidadeAnterior = Estado.quantidadeItens;
+  const escalaTelaAnterior = Estado.escalaTelaAplicada;
+  if (quantidadeAnterior !== n) {
+    resetarZoomFlor();
+    Estado.limiteEscalaTela = quantidadeAnterior !== null && n > quantidadeAnterior
+      ? escalaTelaAnterior * 0.995
+      : null;
+    Estado.quantidadeItens = n;
+  }
 
-  area.style.width = lado + 'px';
-  area.style.height = lado + 'px';
+  const margem = 24;
+  const raioCentro = TAM_CENTRO / 2;
+  const raioItem = TAM_ITEM / 2;
+  const raio = n > 0 ? 172 + (n - 1) * 19 : 0;
+  const posicoes = miolo.itens.map((item, i) => {
+    const ang = (n === 1 ? -90 : -90 + i * 360 / n) * Math.PI / 180;
+    return { item, dx: raio * Math.cos(ang), dy: raio * Math.sin(ang) };
+  });
 
-  const pontos = [];
+  let minX = -raioCentro;
+  let maxX = raioCentro;
+  let minY = -raioCentro;
+  let maxY = raioCentro;
+  posicoes.forEach(p => {
+    minX = Math.min(minX, p.dx - raioItem);
+    maxX = Math.max(maxX, p.dx + raioItem);
+    minY = Math.min(minY, p.dy - raioItem);
+    maxY = Math.max(maxY, p.dy + raioItem);
+  });
+
+  const medidaMinima = TAM_CENTRO + margem * 2 + Math.max(0, n - 1) * 8;
+  const largura = Math.max(medidaMinima, Math.ceil(maxX - minX + margem * 2));
+  const altura = Math.max(medidaMinima, Math.ceil(maxY - minY + margem * 2));
+  const cx = largura / 2 - (minX + maxX) / 2;
+  const cy = altura / 2 - (minY + maxY) / 2;
+  Estado.larguraCanvas = largura;
+  Estado.alturaCanvas = altura;
+
+  area.style.width = largura + 'px';
+  area.style.height = altura + 'px';
+
+  /* conexões entre o centro e os itens */
+  const conexoes = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  conexoes.setAttribute('class', 'conexoes-circulo');
+  conexoes.setAttribute('viewBox', '0 0 ' + largura + ' ' + altura);
+  conexoes.setAttribute('aria-hidden', 'true');
+  conexoes.setAttribute('focusable', 'false');
+  area.appendChild(conexoes);
 
   /* centro */
   const centro = document.createElement('div');
-  centro.className = 'centro';
+  centro.className = metaAtiva ? 'centro meta-centro' : 'centro';
+  if ((!metaAtiva && n > 0 && nConcluidos === n) ||
+      (metaAtiva && metaAtiva.progresso >= metaAtiva.dias)) {
+    centro.classList.add('projeto-concluido');
+  }
   centro.style.background = 'linear-gradient(135deg, ' + COR_MIOLO[0] + ', ' + COR_MIOLO[1] + ')';
   centro.style.left = (cx - TAM_CENTRO / 2) + 'px';
   centro.style.top = (cy - TAM_CENTRO / 2) + 'px';
@@ -294,78 +428,107 @@ function renderizarProjeto() {
   const nAnexos = (miolo.anexos || []).length;
   const csub = document.createElement('div');
   csub.className = 'sub-circulo';
-  if (miolo.feito) {
-    csub.textContent = textoConcluido(miolo);
-    centro.classList.add('feito');
-    centro.appendChild(criarSelo());
-  } else {
-    csub.textContent = nAnexos > 0
-      ? 'toque p/ editar • ' + nAnexos + ' anexo(s)'
-      : 'toque p/ editar';
+  const infoCentro = [];
+  if (metaAtiva) {
+    infoCentro.push(metaAtiva.progresso + '/' + metaAtiva.dias + ' dias');
+    infoCentro.push('prazo: ' + formatarDataMeta(metaAtiva.prazo));
+  } else if (n > 0) {
+    infoCentro.push(nConcluidos + '/' + n + (nConcluidos === 1 ? ' concluído' : ' concluídos'));
   }
+  if (nAnexos > 0) infoCentro.push(nAnexos + ' anexo(s)');
+  infoCentro.push('toque p/ editar');
+  csub.textContent = infoCentro.join(' • ');
   centro.appendChild(csub);
+
+  if (metaAtiva) {
+    const progresso = document.createElement('div');
+    progresso.className = 'progresso-meta';
+    progresso.setAttribute('role', 'progressbar');
+    progresso.setAttribute('aria-valuemin', '0');
+    progresso.setAttribute('aria-valuemax', String(metaAtiva.dias));
+    progresso.setAttribute('aria-valuenow', String(metaAtiva.progresso));
+    const progressoPreenchido = document.createElement('span');
+    progressoPreenchido.style.width = (metaAtiva.progresso / metaAtiva.dias * 100) + '%';
+    progresso.appendChild(progressoPreenchido);
+    centro.appendChild(progresso);
+  }
 
   centro.addEventListener('click', () => { Som.centro(); editarMiolo(); });
   centro.addEventListener('contextmenu', e => {
     e.preventDefault();
     mostrarSheet('Centro: ' + (miolo.nome || 'Sem nome'), [
-      {
-        texto: miolo.feito ? 'Reabrir centro (não concluído)' : 'Concluir centro',
-        acao: () => {
-          miolo.feito = !miolo.feito;
-          miolo.fim = miolo.feito ? new Date().toISOString() : null;
-          guardar();
-          renderizarProjeto();
-        },
-      },
       { texto: 'Editar centro', acao: () => editarMiolo() },
+      { texto: 'Nova meta', cor: 'sucesso', acao: novaMetaFluxo },
       { texto: 'Anexos do centro', acao: () => abrirAnexos(null) },
     ]);
   });
   area.appendChild(centro);
 
   /* itens em círculo */
-  miolo.itens.forEach((item, i) => {
-    const ang = (n === 1 ? -90 : -90 + i * 360 / n) * Math.PI / 180;
-    const x = cx + raio * Math.cos(ang) - TAM_ITEM / 2;
-    const y = cy + raio * Math.sin(ang) - TAM_ITEM / 2;
-    pontos.push({ x: cx + raio * Math.cos(ang), y: cy + raio * Math.sin(ang) });
+  posicoes.forEach(({ item, dx, dy }) => {
+    const meta = normalizarMeta(item.meta);
+    const concluido = itemConcluido(item);
+    const itemX = cx + dx;
+    const itemY = cy + dy;
+    const x = itemX - raioItem;
+    const y = itemY - raioItem;
+    const distancia = Math.hypot(dx, dy);
+    if (distancia > 0) {
+      const ux = dx / distancia;
+      const uy = dy / distancia;
+      const linha = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      linha.setAttribute('class', concluido ? 'linha-circulo concluida' : 'linha-circulo');
+      linha.setAttribute('x1', cx + ux * (TAM_CENTRO / 2 + 2));
+      linha.setAttribute('y1', cy + uy * (TAM_CENTRO / 2 + 2));
+      linha.setAttribute('x2', itemX - ux * (TAM_ITEM / 2 + 2));
+      linha.setAttribute('y2', itemY - uy * (TAM_ITEM / 2 + 2));
+      conexoes.appendChild(linha);
+    }
 
     const [ca, cb] = corDoItem(item.cor);
     const el = document.createElement('div');
     el.className = 'item';
+    if (meta) el.classList.add('meta');
+    if (concluido) el.classList.add('concluido');
     el.style.background = 'linear-gradient(135deg, ' + ca + ', ' + cb + ')';
     el.style.left = x + 'px';
     el.style.top = y + 'px';
+    if (meta) el.style.setProperty('--progresso-meta', (meta.progresso / meta.dias * 100) + '%');
 
     const nome = document.createElement('div');
     nome.className = 'nome-circulo';
     nome.textContent = item.nome || '...';
     el.appendChild(nome);
 
+    if (meta) {
+      const etiquetaMeta = document.createElement('span');
+      etiquetaMeta.className = 'etiqueta-meta';
+      etiquetaMeta.textContent = 'META';
+      el.appendChild(etiquetaMeta);
+    }
+
+    if (concluido) {
+      const marca = document.createElement('span');
+      marca.className = 'marca-concluida';
+      marca.textContent = '✓';
+      marca.title = 'Concluído';
+      marca.setAttribute('aria-label', 'Concluído');
+      el.appendChild(marca);
+    }
+
     const subItens = item.miolo ? item.miolo.itens.length : 0;
     const subAnexos = item.miolo ? item.miolo.anexos.length : 0;
-    let subTxt = textoMeta(item);
-    const resto =
-      (subItens > 0 && subAnexos > 0) ? subItens + ' filho(s) • ' + subAnexos :
-      subAnexos > 0 ? subAnexos + ' anexo(s)' :
-      subItens > 0 ? subItens + ' filho(s)' : '';
-    if (resto) subTxt = subTxt ? subTxt + ' • ' + resto : resto;
+    const textoItens = subItens === 1 ? '1 item' : subItens + ' itens';
+    let subTxt = '';
+    if (meta) subTxt = meta.progresso + '/' + meta.dias + ' dias';
+    else if (subItens > 0 && subAnexos > 0) subTxt = textoItens + ' • ' + subAnexos;
+    else if (subAnexos > 0) subTxt = subAnexos + ' anexo(s)';
+    else if (subItens > 0) subTxt = textoItens;
 
     const sub = document.createElement('div');
     sub.className = 'sub-circulo';
     sub.textContent = subTxt;
-    if (metaCompleta(item)) {
-      el.classList.add('meta-completa');
-      sub.classList.add('meta-ok');
-    }
     el.appendChild(sub);
-
-    if (item.feito) {
-      sub.textContent = textoConcluido(item);
-      el.classList.add('feito');
-      el.appendChild(criarSelo());
-    }
 
     const ordem = document.createElement('span');
     ordem.className = 'menu-circulo';
@@ -409,43 +572,131 @@ function renderizarProjeto() {
     area.appendChild(el);
   });
 
-  /* linhas ligando o centro aos círculos menores */
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.id = 'projeto-linhas';
-  svg.setAttribute('width', lado);
-  svg.setAttribute('height', lado);
-  svg.setAttribute('viewBox', '0 0 ' + lado + ' ' + lado);
-  svg.setAttribute('aria-hidden', 'true');
-  pontos.forEach(p => {
-    svg.appendChild(criarLinha(cx, cy, p.x, p.y));
-  });
-  area.insertBefore(svg, area.firstChild);
-
   aplicarEscala();
 }
 
-function criarLinha(x1, y1, x2, y2) {
-  const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  l.setAttribute('x1', x1);
-  l.setAttribute('y1', y1);
-  l.setAttribute('x2', x2);
-  l.setAttribute('y2', y2);
-  l.setAttribute('stroke', '#8B93A7');
-  l.setAttribute('stroke-opacity', '0.45');
-  l.setAttribute('stroke-width', '2');
-  l.setAttribute('stroke-linecap', 'round');
-  return l;
+function limitarPan(valor, tamanho, disponivel) {
+  const diferenca = tamanho - disponivel;
+  if (diferenca <= 0) return (disponivel - tamanho) / 2;
+  const limite = diferenca / 2;
+  return Math.max(-limite, Math.min(limite, valor));
 }
 
-function aplicarEscala() {
-  const canvasEl = $('#projeto-canvas');
-  const area = $('#projeto-area');
-  const dispW = canvasEl.clientWidth - 16;
-  const dispH = canvasEl.clientHeight - 16;
-  let escala = dispW / Estado.ladoCanvas;
-  if (dispH > 0) escala = Math.min(escala, dispH / Estado.ladoCanvas);
-  area.style.transform = 'scale(' + Math.max(0.15, Math.min(3.5, escala)) + ')';
-  area.style.transformOrigin = 'center center';
+function posicionarFlor() {
+  const canvasEl = $('#flor-canvas');
+  const viewport = $('#flor-viewport');
+  if (!canvasEl || !viewport) return;
+
+  const disponivelLargura = Math.max(1, canvasEl.clientWidth - 16);
+  const disponivelAltura = Math.max(1, canvasEl.clientHeight - 16);
+  const largura = viewport.offsetWidth;
+  const altura = viewport.offsetHeight;
+  Estado.panX = limitarPan(Estado.panX, largura, disponivelLargura);
+  Estado.panY = limitarPan(Estado.panY, altura, disponivelAltura);
+  viewport.style.transform = 'translate(' + Estado.panX + 'px,' + Estado.panY + 'px)';
+  canvasEl.classList.toggle(
+    'ampliado',
+    largura > disponivelLargura + 0.5 || altura > disponivelAltura + 0.5
+  );
+}
+
+function aplicarEscala(preservarPonto = false, ponto = null) {
+  const canvasEl = $('#flor-canvas');
+  const viewport = $('#flor-viewport');
+  const area = $('#flor-area');
+  if (!canvasEl || !viewport || !area) return;
+
+  const margem = 16;
+  const disponivelLargura = Math.max(1, canvasEl.clientWidth - margem);
+  const disponivelAltura = Math.max(1, canvasEl.clientHeight - margem);
+  const escalaAnterior = Estado.escalaAplicada || 1;
+  let focoX = Estado.larguraCanvas / 2;
+  let focoY = Estado.alturaCanvas / 2;
+  let alvoX = null;
+  let alvoY = null;
+  let origemX = 0;
+  let origemY = 0;
+
+  if (preservarPonto) {
+    const rectCanvas = canvasEl.getBoundingClientRect();
+    const rectArea = area.getBoundingClientRect();
+    const estilos = getComputedStyle(canvasEl);
+    origemX = rectCanvas.left + (parseFloat(estilos.paddingLeft) || 0);
+    origemY = rectCanvas.top + (parseFloat(estilos.paddingTop) || 0);
+    alvoX = ponto && Number.isFinite(ponto.x) ? ponto.x : rectCanvas.left + rectCanvas.width / 2;
+    alvoY = ponto && Number.isFinite(ponto.y) ? ponto.y : rectCanvas.top + rectCanvas.height / 2;
+    focoX = (alvoX - rectArea.left) / escalaAnterior;
+    focoY = (alvoY - rectArea.top) / escalaAnterior;
+  }
+
+  const escalaTelaNatural = Math.min(
+    disponivelLargura / Estado.larguraCanvas,
+    disponivelAltura / Estado.alturaCanvas
+  );
+  const escalaTela = Estado.limiteEscalaTela === null
+    ? escalaTelaNatural
+    : Math.min(escalaTelaNatural, Estado.limiteEscalaTela);
+  const escala = Math.max(0.01, Math.min(20, escalaTela * Estado.zoomUsuario));
+  const larguraEscalada = Estado.larguraCanvas * escala;
+  const alturaEscalada = Estado.alturaCanvas * escala;
+
+  if (preservarPonto && alvoX !== null && alvoY !== null) {
+    Estado.panX = alvoX - origemX - focoX * escala;
+    Estado.panY = alvoY - origemY - focoY * escala;
+  } else {
+    Estado.panX = 0;
+    Estado.panY = 0;
+  }
+
+  viewport.style.width = larguraEscalada + 'px';
+  viewport.style.height = alturaEscalada + 'px';
+  area.style.transform = 'scale(' + escala + ')';
+  Estado.escalaAplicada = escala;
+  Estado.escalaTelaAplicada = escalaTela;
+  posicionarFlor();
+}
+
+function alterarZoom(fator, ponto = null) {
+  Estado.zoomUsuario = Math.max(0.5, Math.min(20, Estado.zoomUsuario * fator));
+  aplicarEscala(true, ponto);
+}
+
+function renderizarControleMeta(meta) {
+  const controle = $('#meta-controle');
+  if (!controle) return;
+  controle.hidden = !meta;
+  if (!meta) return;
+
+  $('#meta-progresso-valor').textContent = meta.progresso + '/' + meta.dias + ' dias';
+  $('#meta-progresso-prazo').textContent = 'Prazo: ' + formatarDataMeta(meta.prazo);
+  $('#meta-menos').disabled = meta.progresso <= 0;
+  $('#meta-mais').disabled = meta.progresso >= meta.dias;
+  $('#meta-concluir').disabled = meta.progresso >= meta.dias;
+}
+
+async function registrarProgressoMeta(delta) {
+  const item = Estado.itemPai;
+  if (!item || !item.meta) return;
+  const meta = normalizarMeta(item.meta);
+  const novoProgresso = Math.max(0, Math.min(meta.dias, meta.progresso + delta));
+  if (novoProgresso === meta.progresso) return;
+  meta.progresso = novoProgresso;
+  item.meta = meta;
+  item.concluido = novoProgresso >= meta.dias;
+  await guardar();
+  renderizarFlor();
+}
+
+async function concluirMetaAtual() {
+  const item = Estado.itemPai;
+  if (!item || !item.meta) return;
+  const meta = normalizarMeta(item.meta);
+  meta.progresso = meta.dias;
+  item.meta = meta;
+  item.concluido = true;
+  await guardar();
+  renderizarFlor();
+  toast('Meta concluída.');
 }
 
 /* ============================================================
@@ -458,36 +709,185 @@ function editarMiolo() {
     miolo.nome = nome;
     miolo.anotacoes = notas;
     guardar();
-    renderizarProjeto();
+    renderizarFlor();
   });
+}
+
+function abrirEditorMeta(titulo, nome, dias, inicio, okTexto) {
+  const hoje = dataLocalISO();
+  const prazo = somarDias(inicio || hoje, dias || 30);
+  const resultado = abrirModal(
+    titulo,
+    '<label for="meta-nome">Nome da meta</label>' +
+    '<input class="campo" id="meta-nome" type="text" value="' + escapeHtml(nome || '') + '">' +
+    '<label for="meta-dias">Duração estimada (dias)</label>' +
+    '<input class="campo" id="meta-dias" type="number" min="1" max="3650" step="1" value="' + escapeHtml(dias || 30) + '">' +
+    '<label for="meta-inicio">Data de início</label>' +
+    '<input class="campo" id="meta-inicio" type="date" value="' + escapeHtml(inicio || hoje) + '">' +
+    '<p id="meta-previsao" style="margin:14px 0 0;color:#8B98A8;font-size:12px">Prazo previsto: ' + escapeHtml(formatarDataMeta(prazo)) + '</p>',
+    okTexto
+  );
+
+  const atualizarPrevisao = () => {
+    const diasInformados = Math.floor(Number($('#meta-dias').value));
+    const inicioInformado = $('#meta-inicio').value || hoje;
+    const previsao = $('#meta-previsao');
+    if (!Number.isFinite(diasInformados) || diasInformados < 1) {
+      previsao.textContent = 'Informe uma duração válida.';
+      return;
+    }
+    previsao.textContent = 'Prazo previsto: ' + formatarDataMeta(somarDias(inicioInformado, diasInformados));
+  };
+  $('#meta-dias').addEventListener('input', atualizarPrevisao);
+  $('#meta-inicio').addEventListener('input', atualizarPrevisao);
+
+  return resultado.then(res => {
+    if (res !== 'ok') return null;
+    return {
+      nome: ($('#meta-nome').value || '').trim(),
+      dias: Math.floor(Number($('#meta-dias').value)),
+      inicio: $('#meta-inicio').value || hoje,
+    };
+  });
+}
+
+async function novaMetaFluxo() {
+  const dados = await abrirEditorMeta('Nova meta', '', 30, dataLocalISO(), 'Criar');
+  // O fluxo é concluído por novoConfirmacaoMeta abaixo, mantendo o mesmo modal global.
+  if (!dados) return;
+  await novoConfirmacaoMeta(dados);
+}
+
+async function novoConfirmacaoMeta(dados) {
+  const nome = String(dados.nome || '').trim();
+  const dias = Math.floor(Number(dados.dias));
+  if (!nome || !Number.isFinite(dias) || dias < 1) {
+    toast('Informe um nome e uma duração válida.');
+    return;
+  }
+  const miolo = mioloAtual();
+  const item = novoItem(nome, miolo.itens.length);
+  item.meta = criarMeta(dias, dados.inicio);
+  miolo.itens.push(item);
+  await guardar();
+  renderizarFlor();
+  toast('Meta criada.');
+}
+
+async function editarMetaItem(item) {
+  const meta = normalizarMeta(item.meta);
+  if (!meta) return;
+  const dados = await abrirEditorMeta('Editar meta', item.nome, meta.dias, meta.inicio, 'Salvar');
+  if (!dados) return;
+  const nome = String(dados.nome || '').trim();
+  const dias = Math.floor(Number(dados.dias));
+  if (!nome || !Number.isFinite(dias) || dias < 1) {
+    toast('Informe um nome e uma duração válida.');
+    return;
+  }
+  meta.dias = dias;
+  meta.progresso = Math.min(meta.progresso, dias);
+  meta.inicio = dados.inicio;
+  meta.prazo = somarDias(meta.inicio, dias);
+  item.nome = nome;
+  item.miolo.nome = nome;
+  item.meta = meta;
+  item.concluido = meta.progresso >= meta.dias;
+  await guardar();
+  renderizarFlor();
+  toast('Meta atualizada.');
+}
+
+async function transformarEmMeta(item) {
+  const dados = await abrirEditorMeta('Transformar em meta', item.nome, 30, dataLocalISO(), 'Criar meta');
+  if (!dados) return;
+  const nome = String(dados.nome || '').trim();
+  const dias = Math.floor(Number(dados.dias));
+  if (!nome || !Number.isFinite(dias) || dias < 1) {
+    toast('Informe um nome e uma duração válida.');
+    return;
+  }
+  item.nome = nome;
+  item.miolo.nome = nome;
+  item.meta = criarMeta(dias, dados.inicio);
+  item.concluido = false;
+  await guardar();
+  renderizarFlor();
+  toast('Item transformado em meta.');
 }
 
 function mostrarOpcoesItem(item) {
   const nome = item.nome || '...';
+  const meta = normalizarMeta(item.meta);
+  const opcaoMeta = meta
+    ? { texto: 'Editar meta', acao: () => editarMetaItem(item) }
+    : {
+        texto: 'Transformar em meta',
+        cor: 'sucesso',
+        acao: () => transformarEmMeta(item),
+      };
+  const opcaoConclusao = meta
+    ? (meta.progresso >= meta.dias || itemConcluido(item)
+        ? {
+            texto: 'Reabrir meta',
+            acao: async () => {
+              meta.progresso = Math.max(0, meta.dias - 1);
+              item.meta = meta;
+              item.concluido = false;
+              await guardar();
+              renderizarFlor();
+              toast('Meta reaberta.');
+            },
+          }
+        : {
+            texto: 'Concluir meta',
+            cor: 'sucesso',
+            acao: async () => {
+              meta.progresso = meta.dias;
+              item.meta = meta;
+              item.concluido = true;
+              Som.centro();
+              await guardar();
+              renderizarFlor();
+              toast('Meta concluída.');
+            },
+          })
+    : (item.concluido === true
+        ? {
+            texto: 'Reabrir item',
+            acao: async () => {
+              item.concluido = false;
+              await guardar();
+              renderizarFlor();
+              toast('Item reaberto.');
+            },
+          }
+        : {
+            texto: 'Marcar como concluído',
+            cor: 'sucesso',
+            acao: async () => {
+              Som.centro();
+              item.concluido = true;
+              await guardar();
+              renderizarFlor();
+              toast('Item concluído.');
+            },
+          });
+
   mostrarSheet('Item: ' + nome, [
     {
       texto: 'Editar item',
       acao: () => editar('Editar item', item.nome, item.anotacoes || '', (n, notas) => {
         item.nome = n;
+        if (item.miolo) item.miolo.nome = n;
         item.anotacoes = notas;
         guardar();
-        renderizarProjeto();
+        renderizarFlor();
       }),
     },
-    {
-      texto: item.feito ? 'Reabrir item (não concluído)' : 'Marcar item como concluído',
-      acao: () => {
-        item.feito = !item.feito;
-        item.fim = item.feito ? new Date().toISOString() : null;
-        guardar();
-        renderizarProjeto();
-      },
-    },
-    {
-      texto: metaAtiva(item) ? ('Meta em dias: ' + textoMeta(item)) : 'Definir meta em dias...',
-      acao: () => gerenciarMeta(item),
-    },
     { texto: 'Anexos', acao: () => abrirAnexos(item) },
+    opcaoMeta,
+    opcaoConclusao,
     {
       texto: 'Apagar item',
       cor: 'danger',
@@ -495,7 +895,7 @@ function mostrarOpcoesItem(item) {
         const miolo = mioloAtual();
         miolo.itens = miolo.itens.filter(i => i !== item);
         guardar();
-        renderizarProjeto();
+        renderizarFlor();
         toast('Item apagado.');
       }),
     },
@@ -503,11 +903,11 @@ function mostrarOpcoesItem(item) {
 }
 
 function novoItemFluxo() {
-  prompt('Novo item', 'Nome do item:', 'Ex.: Banheiro', 'Banheiro', nome => {
+  prompt('Novo item', 'Nome do item:', '', '', nome => {
     const miolo = mioloAtual();
     miolo.itens.push(novoItem(nome.trim(), miolo.itens.length));
     guardar();
-    renderizarProjeto();
+    renderizarFlor();
   });
 }
 
@@ -648,7 +1048,7 @@ function adicionarAnexoArquivo(tipo, extPermitidas) {
 }
 
 function pedirLink(titulo, tipo) {
-  prompt(titulo, 'Cole o endereço:', 'https://', 'https://', async texto => {
+  prompt(titulo, 'Cole o endereço:', '', '', async texto => {
     let v = texto.trim();
     if (!v || v === 'https://') return;
     if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
@@ -730,7 +1130,8 @@ function mostrarSheet(titulo, opcoes) {
   cont.innerHTML = '';
   opcoes.forEach(op => {
     const b = document.createElement('button');
-    b.className = 'sheet-opcao' + (op.cor === 'danger' ? ' danger' : '');
+    b.className = 'sheet-opcao' +
+      (op.cor === 'danger' ? ' danger' : op.cor === 'sucesso' ? ' sucesso' : '');
     b.textContent = op.texto;
     b.addEventListener('click', () => {
       fecharSheet();
@@ -743,130 +1144,6 @@ function mostrarSheet(titulo, opcoes) {
 
 function fecharSheet() {
   $('#sheet-overlay').hidden = true;
-}
-
-/* ============================================================
- * META EM DIAS (prazo / meta diária dos itens)
- *  item.meta = { alvo: n dias, dias: ['YYYY-MM-DD', ...] }
- * ============================================================ */
-
-function metaAtiva(item) {
-  return (item.meta && typeof item.meta.alvo === 'number' && item.meta.alvo > 0) ? item.meta : null;
-}
-
-function ordenarDias(meta) {
-  if (!Array.isArray(meta.dias)) meta.dias = [];
-  meta.dias = meta.dias
-    .filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d))
-    .sort();
-  return meta.dias;
-}
-
-function hojeISO() {
-  const d = new Date();
-  return d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
-}
-
-function diaLabel(iso) {
-  const p = String(iso || '').split('-');
-  return p.length === 3 ? p[2] + '/' + p[1] : String(iso || '');
-}
-
-function metaFeitos(item) {
-  const m = metaAtiva(item);
-  return m && Array.isArray(m.dias) ? m.dias.length : 0;
-}
-
-function textoMeta(item) {
-  const m = metaAtiva(item);
-  if (!m) return '';
-  return metaFeitos(item) + '/' + m.alvo + ' dias';
-}
-
-function metaCompleta(item) {
-  const m = metaAtiva(item);
-  return !!(m && metaFeitos(item) >= m.alvo);
-}
-
-function gerenciarMeta(item) {
-  const m = (item.meta && typeof item.meta.alvo === 'number' && item.meta.alvo > 0)
-    ? item.meta
-    : (item.meta = { alvo: 30, dias: [] });
-  m.alvo = Math.round(Math.max(1, Math.min(3650, m.alvo || 30)));
-
-  abrirModal('Meta em dias', '', 'Fechar').then(() => {
-    renderizarProjeto();
-  });
-  pintarMeta(item);
-}
-
-function pintarMeta(item) {
-  const m = item.meta;
-  ordenarDias(m);
-  const feitos = m.dias.length;
-  const hoje = hojeISO();
-  const marcHoje = m.dias.includes(hoje);
-  const pct = Math.min(100, Math.round(feitos / m.alvo * 100));
-  const falta = Math.max(0, m.alvo - feitos);
-
-  $('#modal-titulo').textContent = 'Meta em dias';
-  $('#modal-ok').textContent = 'Fechar';
-  $('#modal-ok').className = 'btn btn-primario';
-
-  $('#modal-corpo').innerHTML =
-    '<div class="meta-status">' + feitos + ' de ' + m.alvo + ' dias' +
-      (falta > 0 ? ' (falta ' + falta + ')' : ' • concluída') + '</div>' +
-    '<div class="meta-barra"><div class="meta-barra-fill" style="width:' + pct + '%"></div></div>' +
-    '<button class="btn btn-primario btn-marcar-hoje" id="m-marcar">' +
-      (marcHoje ? 'Desmarcar hoje (já marcado)' : 'Marcar dia de hoje') + '</button>' +
-    '<label for="m-alvo">Meta (dias)</label>' +
-    '<div class="linha-meta">' +
-      '<input class="campo" id="m-alvo" type="number" inputmode="numeric" min="1" max="3650" value="' + m.alvo + '">' +
-      '<button class="btn btn-secundario" id="m-aplicar">Aplicar</button>' +
-    '</div>' +
-    (m.dias.length
-      ? '<div class="meta-dias">' + m.dias.map(d =>
-          '<span class="meta-dia-chip">' + diaLabel(d) +
-          '<button type="button" data-dia="' + d + '" title="Desmarcar dia">' + '\u00D7' + '</button></span>'
-        ).join('') + '</div>'
-      : '<p class="meta-ajuda">Toque em "Marcar dia de hoje" todos os dias.</p>') +
-    '<button class="btn btn-texto" id="m-remover">Remover meta deste item</button>';
-
-  $('#m-marcar').addEventListener('click', () => {
-    if (marcHoje) m.dias = m.dias.filter(d => d !== hoje);
-    else m.dias.push(hoje);
-    guardar();
-    pintarMeta(item);
-  });
-
-  $('#m-aplicar').addEventListener('click', () => {
-    const v = parseInt(($('#m-alvo').value || '').trim(), 10);
-    if (!isNaN(v) && v >= 1 && v <= 3650) {
-      m.alvo = v;
-      guardar();
-      pintarMeta(item);
-    } else {
-      toast('Informe dias entre 1 e 3650.');
-    }
-  });
-
-  $('#m-alvo').addEventListener('keydown', e => { if (e.key === 'Enter') $('#m-aplicar').click(); });
-
-  document.querySelectorAll('#modal-corpo [data-dia]').forEach(b => {
-    b.addEventListener('click', () => {
-      m.dias = m.dias.filter(d => d !== b.dataset.dia);
-      guardar();
-      pintarMeta(item);
-    });
-  });
-
-  $('#m-remover').addEventListener('click', () => {
-    item.meta = null;
-    guardar();
-    resolverModal('ok');
-  });
 }
 
 /* ============================================================
@@ -927,7 +1204,7 @@ function importarFluxo() {
 
 function wire() {
   $('#btn-novo-projeto').addEventListener('click', () => {
-    prompt('Novo projeto', 'Dê um nome ao centro deste projeto:', 'Ex.: Reforma', 'Reforma', async nome => {
+    prompt('Novo projeto', 'Dê um nome ao projeto:', '', '', async nome => {
       const projeto = {
         id: novoId(),
         nome: nome.trim(),
@@ -936,7 +1213,7 @@ function wire() {
       };
       await Storage.salvarProjeto(projeto);
       await recarregarProjetos();
-      abrirProjeto(projeto);
+      irParaFlor(projeto);
     });
   });
 
@@ -957,8 +1234,84 @@ function wire() {
     toast('Guardado.');
   });
   $('#btn-anexos-voltar').addEventListener('click', () => {
-    mostrarTela('projeto');
-    renderizarProjeto();
+    mostrarTela('flor');
+    renderizarFlor();
+  });
+
+  const canvasFlor = $('#flor-canvas');
+  let arrasto = null;
+
+  canvasFlor.addEventListener('wheel', e => {
+    if (e.deltaY === 0) return;
+    e.preventDefault();
+    alterarZoom(e.deltaY < 0 ? 1.12 : 1 / 1.12, { x: e.clientX, y: e.clientY });
+  }, { passive: false });
+
+  canvasFlor.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const viewport = $('#flor-viewport');
+    const temOverflow = viewport.offsetWidth > canvasFlor.clientWidth - 16 ||
+      viewport.offsetHeight > canvasFlor.clientHeight - 16;
+    if (!temOverflow) return;
+
+    arrasto = {
+      id: e.pointerId,
+      inicioX: e.clientX,
+      inicioY: e.clientY,
+      panX: Estado.panX,
+      panY: Estado.panY,
+      ativo: false
+    };
+    Estado.arrastouFlor = false;
+  });
+
+  canvasFlor.addEventListener('pointermove', e => {
+    if (!arrasto || arrasto.id !== e.pointerId) return;
+    const dx = e.clientX - arrasto.inicioX;
+    const dy = e.clientY - arrasto.inicioY;
+    if (!arrasto.ativo && Math.hypot(dx, dy) < 12) return;
+
+    if (!arrasto.ativo) {
+      arrasto.ativo = true;
+      Estado.arrastouFlor = true;
+      canvasFlor.classList.add('arrastando');
+      try { canvasFlor.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+
+    Estado.panX = arrasto.panX + dx;
+    Estado.panY = arrasto.panY + dy;
+    posicionarFlor();
+    e.preventDefault();
+  });
+
+  function finalizarArrasto(e) {
+    if (!arrasto || (e && arrasto.id !== e.pointerId)) return;
+    const id = arrasto.id;
+    arrasto = null;
+    canvasFlor.classList.remove('arrastando');
+    try {
+      if (canvasFlor.hasPointerCapture(id)) canvasFlor.releasePointerCapture(id);
+    } catch (_) {}
+    if (e && e.type === 'pointercancel') Estado.arrastouFlor = false;
+  }
+
+  canvasFlor.addEventListener('pointerup', finalizarArrasto);
+  canvasFlor.addEventListener('pointercancel', finalizarArrasto);
+  canvasFlor.addEventListener('lostpointercapture', finalizarArrasto);
+  window.addEventListener('pointerup', finalizarArrasto);
+  window.addEventListener('pointercancel', finalizarArrasto);
+  canvasFlor.addEventListener('click', e => {
+    if (!Estado.arrastouFlor) return;
+    e.preventDefault();
+    e.stopPropagation();
+    Estado.arrastouFlor = false;
+  }, true);
+
+  $('#meta-menos').addEventListener('click', () => registrarProgressoMeta(-1));
+  $('#meta-mais').addEventListener('click', () => registrarProgressoMeta(1));
+  $('#meta-concluir').addEventListener('click', concluirMetaAtual);
+  $('#meta-progresso').addEventListener('click', () => {
+    if (Estado.itemPai && Estado.itemPai.meta) editarMetaItem(Estado.itemPai);
   });
 
   document.querySelectorAll('[data-anexo-tipo]').forEach(b => {
@@ -975,13 +1328,18 @@ function wire() {
     if (e.key !== 'Escape') return;
     if (!$('#sheet-overlay').hidden) fecharSheet();
     else if (!$('#modal-overlay').hidden) resolverModal(null);
-    else if (Estado.tela === 'projeto') voltar();
+    else if (Estado.tela === 'flor') voltar();
   });
 
-  window.addEventListener('resize', () => { if (Estado.tela === 'projeto') aplicarEscala(); });
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', () => { if (Estado.tela === 'projeto') aplicarEscala(); });
+  if ('ResizeObserver' in window) {
+    Estado.observadorTamanho = new ResizeObserver(() => {
+      if (Estado.tela === 'flor') aplicarEscala(true);
+    });
+    Estado.observadorTamanho.observe($('#flor-canvas'));
   }
+  window.addEventListener('resize', () => {
+    if (Estado.tela === 'flor') aplicarEscala(true);
+  });
 }
 
 /* ============================================================
@@ -1001,7 +1359,7 @@ async function iniciar() {
     document.documentElement.dataset.ready = '1';
   } catch (err) {
     document.documentElement.dataset.initerr = String(err && err.message || err);
-    console.error('[Fractal]', err);
+    mostrarErroTela(String(err && err.message || err));
   }
 }
 

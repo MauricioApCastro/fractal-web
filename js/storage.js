@@ -47,8 +47,10 @@ const Storage = (() => {
 
   return {
     // ---------- projetos ----------
-    listarProjetos: () => run('projetos', 'readonly', s => s.getAll()),
-    carregarProjeto: id => run('projetos', 'readonly', s => s.get(id)),
+    listarProjetos: () => run('projetos', 'readonly', s => s.getAll())
+      .then(projetos => (projetos || []).map(compatibilizarProjeto)),
+    carregarProjeto: id => run('projetos', 'readonly', s => s.get(id))
+      .then(compatibilizarProjeto),
     salvarProjeto: projeto => run('projetos', 'readwrite', s => s.put(projeto)),
     apagarProjeto: id => run('projetos', 'readwrite', s => s.delete(id)),
 
@@ -63,7 +65,7 @@ const Storage = (() => {
  * Modelo de dados (formato interno, camelCase)
  *  Projeto: { id, nome, modificado, raiz }
  *  Miolo:   { nome, anotacoes, itens[], anexos[] }
- *  Item:    { nome, cor, miolo }
+ *  Item:    { nome, cor, concluido, miolo }
  *  Anexo:   { id, nome, tipo, valor, adicionado, arquivo }
  * ============================================================ */
 
@@ -72,7 +74,36 @@ function novoMiolo(nome) {
 }
 
 function novoItem(nome, cor) {
-  return { nome: nome, cor: cor || 0, miolo: novoMiolo(nome) };
+  return { nome: nome, cor: cor || 0, concluido: false, miolo: novoMiolo(nome) };
+}
+
+function metaDoJson(d) {
+  if (!d || typeof d !== 'object') return null;
+  const diasBrutos = d.dias != null ? d.dias : d.Dias != null ? d.Dias :
+    d.alvo != null ? d.alvo : d.Alvo;
+  const dias = Math.max(1, Math.min(3650, Math.floor(Number(diasBrutos) || 30)));
+  let progressoBruto = d.progresso != null ? d.progresso : d.Progresso;
+  if (progressoBruto == null) {
+    const marcados = d.dias || d.Dias;
+    progressoBruto = Array.isArray(marcados) ? marcados.length : 0;
+  }
+  const progresso = Math.max(0, Math.min(dias, Math.floor(Number(progressoBruto) || 0)));
+  const inicioBruto = d.inicio || d.Inicio || new Date().toISOString();
+  const dataInicio = /^\d{4}-\d{2}-\d{2}$/.test(inicioBruto)
+    ? new Date(inicioBruto + 'T12:00:00')
+    : new Date(inicioBruto);
+  const inicio = isNaN(dataInicio.getTime())
+    ? new Date().toISOString()
+    : dataInicio.getFullYear() + '-' + String(dataInicio.getMonth() + 1).padStart(2, '0') + '-' + String(dataInicio.getDate()).padStart(2, '0');
+  let prazo = d.prazo || d.Prazo || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(prazo)) {
+    const data = new Date(inicio + 'T12:00:00');
+    if (!isNaN(data.getTime())) {
+      data.setDate(data.getDate() + dias);
+      prazo = data.getFullYear() + '-' + String(data.getMonth() + 1).padStart(2, '0') + '-' + String(data.getDate()).padStart(2, '0');
+    }
+  }
+  return { dias, progresso, inicio, prazo };
 }
 
 /* Traduz o JSON do desktop (.fractal, PascalCase) ou o formato interno. */
@@ -85,29 +116,17 @@ function mioloDoJson(d) {
 
   const miolo = novoMiolo(nome);
   miolo.anotacoes = anotacoes || '';
-  miolo.feito = origem.feito != null ? !!origem.feito : origem.Feito != null ? !!origem.Feito : false;
-  miolo.fim = origem.fim || origem.Fim || null;
 
   miolo.itens = (petalasSrc || []).map((p, i) => {
     const cor = p.cor != null ? p.cor : p.Cor != null ? p.Cor : i % 10;
     const pNome = p.nome != null ? p.nome : p.Nome != null ? p.Nome : 'Sem nome';
     const pMiolo = p.miolo || p.Miolo;
-    const pMeta = p.meta || p.Meta;
-    const meta = (pMeta && pMeta.alvo)
-      ? {
-          alvo: Math.max(1, Math.min(3650, parseInt(pMeta.alvo, 10) || 30)),
-          dias: Array.isArray(pMeta.dias)
-            ? pMeta.dias.filter(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)).sort()
-            : [],
-        }
-      : undefined;
     return {
       nome: pNome,
       cor: cor,
+      concluido: p.concluido === true || p.Concluido === true || p.feito === true || p.Feito === true,
+      meta: metaDoJson(p.meta || p.Meta),
       anotacoes: p.anotacoes != null ? p.anotacoes : p.Anotacoes != null ? p.Anotacoes : '',
-      feito: p.feito != null ? !!p.feito : p.Feito != null ? !!p.Feito : false,
-      fim: p.fim || p.Fim || null,
-      meta: meta,
       miolo: pMiolo ? mioloDoJson(pMiolo) : novoMiolo(pNome),
     };
   });
@@ -124,22 +143,36 @@ function mioloDoJson(d) {
   return miolo;
 }
 
+function compatibilizarMiolo(m) {
+  if (!m || typeof m !== 'object') return m;
+  if (m.concluido == null && m.feito != null) m.concluido = m.feito === true;
+  if (m.meta) m.meta = metaDoJson(m.meta);
+  if (Array.isArray(m.itens)) m.itens.forEach(compatibilizarMiolo);
+  return m;
+}
+
+function compatibilizarProjeto(projeto) {
+  if (projeto && projeto.raiz) compatibilizarMiolo(projeto.raiz);
+  return projeto;
+}
+
 /* Exporta para o formato do desktop (.fractal). */
 function mioloParaJson(m) {
   return {
     Nome: m.nome,
     Anotacoes: m.anotacoes || '',
-    Feito: !!m.feito,
-    Fim: m.fim || null,
     Petalas: (m.itens || []).map(p => ({
       Nome: p.nome,
       Anotacoes: p.anotacoes || '',
       Cor: p.cor,
-      Feito: !!p.feito,
-      Fim: p.fim || null,
-      Meta: (p.meta && typeof p.meta.alvo === 'number' && p.meta.alvo > 0)
-        ? { Alvo: p.meta.alvo, Dias: (p.meta.dias || []).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(String(d))).sort() }
-        : null,
+      Concluido: p.concluido === true,
+      Feito: p.concluido === true,
+      Meta: p.meta ? {
+        Dias: p.meta.dias,
+        Progresso: p.meta.progresso,
+        Inicio: p.meta.inicio,
+        Prazo: p.meta.prazo,
+      } : null,
       Miolo: p.miolo ? mioloParaJson(p.miolo) : null,
     })),
     Anexos: (m.anexos || []).map(a => ({
@@ -294,6 +327,6 @@ function extDe(nome) {
 function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=3', { updateViaCache: 'none' }).catch(() => {});
   });
 }

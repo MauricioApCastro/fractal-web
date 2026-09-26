@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Planejamento e idéias em círculos - reformas, obras, ideias e listas em organização visual.">
+  <meta name="description" content="Fractal - organize projetos, tarefas, notas e ideias em um formato visual de círculos, com anexos.">
   <meta name="theme-color" content="#0B1020">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Planejamento e idéias em círculos">
-  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-title" content="Fractal">
+  <link rel="manifest" href="manifest.json?v=3">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
-  <title>Planejamento e idéias em círculos</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <title>Fractal - Planejador Visual</title>
+  <link rel="stylesheet" href="css/styles.css?v=3">
 </head>
 <body>
 
@@ -23,8 +23,8 @@
       <div class="brand">
         <div class="brand-circulo"></div>
         <div>
-          <h1>Planejamento e idéias em círculos</h1>
-          <p>Reformas, obras, ideias e listas</p>
+          <h1>Fractal</h1>
+          <p>Planejamento e ideias em círculos</p>
         </div>
       </div>
       <div class="acoes-lista">
@@ -37,7 +37,7 @@
       <div id="lista-vazia" class="vazio">
         <div class="vazio-circulo"></div>
         <p class="vazio-titulo">Nenhum projeto ainda.</p>
-        <p class="vazio-sub">Toque em "Novo projeto" para começar a planejar.</p>
+        <p class="vazio-sub">Toque em "Novo projeto" para começar.</p>
       </div>
     </div>
 
@@ -50,8 +50,8 @@
     <input type="file" id="input-importar" accept=".fractal,.json,application/json" hidden>
   </section>
 
-  <!-- ============ TELA: CÍRCULOS ============ -->
-  <section id="tela-projeto" class="tela">
+  <!-- ============ TELA: FLOR (CÍRCULOS) ============ -->
+  <section id="tela-flor" class="tela">
     <header class="topbar">
       <button class="btn-icon" id="btn-voltar" title="Voltar" aria-label="Voltar">&#8592;</button>
       <div class="breadcrumb" id="caminho"></div>
@@ -61,8 +61,19 @@
         <button class="btn-icon" id="btn-guardar" title="Guardar" aria-label="Guardar">&#10003;</button>
       </div>
     </header>
-    <div class="projeto-canvas" id="projeto-canvas">
-      <div id="projeto-area"></div>
+    <div class="flor-canvas" id="flor-canvas">
+      <div id="flor-viewport">
+        <div id="flor-area"></div>
+      </div>
+    </div>
+    <div id="meta-controle" class="meta-controle" hidden>
+      <button id="meta-menos" class="meta-btn" aria-label="Reduzir progresso" title="Reduzir em um dia">&minus;1</button>
+      <button id="meta-progresso" class="meta-progresso" title="Editar meta" aria-label="Editar meta">
+        <span id="meta-progresso-valor">0/30 dias</span>
+        <small id="meta-progresso-prazo">Prazo: --/--/----</small>
+      </button>
+      <button id="meta-mais" class="meta-btn" aria-label="Registrar progresso" title="Registrar um dia">+1</button>
+      <button id="meta-concluir" class="meta-btn meta-concluir" aria-label="Concluir meta" title="Concluir meta">✓</button>
     </div>
     <button class="fab" id="btn-novo-item" aria-label="Novo item">+</button>
   </section>
@@ -77,14 +88,14 @@
 
     <div class="barra-anexos">
       <button class="btn btn-secundario" data-anexo-tipo="imagem">+ Imagem</button>
-      <button class="btn btn-secundario" data-anexo-tipo="video">+ Video</button>
+      <button class="btn btn-secundario" data-anexo-tipo="video">+ Vídeo</button>
       <button class="btn btn-secundario" data-anexo-tipo="link">+ Link</button>
       <button class="btn btn-secundario" data-anexo-tipo="arquivo">+ Arquivo</button>
     </div>
 
     <div id="anexos-container" class="anexos-container">
       <div id="anexos-vazio" class="vazio">
-        <p class="vazio-sub">Nenhum anexo ainda. Adicione fotos, videos, links ou orcamentos.</p>
+        <p class="vazio-sub">Nenhum anexo ainda. Adicione imagens, vídeos, links ou arquivos.</p>
       </div>
     </div>
 
@@ -113,7 +124,9 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="js/storage.js"></script>
-  <script src="js/app.js"></script>
+  <div id="erro-tela" class="erro-tela" hidden></div>
+
+  <script src="js/storage.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>
