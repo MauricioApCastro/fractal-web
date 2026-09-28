@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Fractal">
-  <link rel="manifest" href="manifest.json?v=3">
+  <link rel="manifest" href="manifest.json?v=10">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <title>Fractal - Planejador Visual</title>
-  <link rel="stylesheet" href="css/styles.css?v=3">
+  <link rel="stylesheet" href="css/styles.css?v=10">
 </head>
 <body>
 
@@ -87,15 +87,29 @@
     </header>
 
     <div class="barra-anexos">
-      <button class="btn btn-secundario" data-anexo-tipo="imagem">+ Imagem</button>
-      <button class="btn btn-secundario" data-anexo-tipo="video">+ Vídeo</button>
-      <button class="btn btn-secundario" data-anexo-tipo="link">+ Link</button>
-      <button class="btn btn-secundario" data-anexo-tipo="arquivo">+ Arquivo</button>
+      <button class="add-anexo tipo-imagem" data-anexo-tipo="imagem" type="button">
+        <span class="add-icone" data-icone="imagem" aria-hidden="true"></span>
+        <span class="add-texto">Imagem</span>
+      </button>
+      <button class="add-anexo tipo-video" data-anexo-tipo="video" type="button">
+        <span class="add-icone" data-icone="video" aria-hidden="true"></span>
+        <span class="add-texto">Vídeo</span>
+      </button>
+      <button class="add-anexo tipo-link" data-anexo-tipo="link" type="button">
+        <span class="add-icone" data-icone="link" aria-hidden="true"></span>
+        <span class="add-texto">Link</span>
+      </button>
+      <button class="add-anexo tipo-arquivo" data-anexo-tipo="arquivo" type="button">
+        <span class="add-icone" data-icone="arquivo" aria-hidden="true"></span>
+        <span class="add-texto">Arquivo</span>
+      </button>
     </div>
 
     <div id="anexos-container" class="anexos-container">
-      <div id="anexos-vazio" class="vazio">
-        <p class="vazio-sub">Nenhum anexo ainda. Adicione imagens, vídeos, links ou arquivos.</p>
+      <div id="anexos-vazio" class="vazio vazio-anexos">
+        <span class="vazio-icone" data-icone="imagem" aria-hidden="true"></span>
+        <p class="vazio-titulo">Nenhum anexo ainda</p>
+        <p class="vazio-sub">Adicione imagens, vídeos, links ou arquivos a este item.</p>
       </div>
     </div>
 
@@ -126,7 +140,7 @@
 
   <div id="erro-tela" class="erro-tela" hidden></div>
 
-  <script src="js/storage.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/storage.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

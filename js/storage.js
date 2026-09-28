@@ -326,7 +326,10 @@ function extDe(nome) {
  * ============================================================ */
 function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
+  try {
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
+  } catch (err) { /* segue o fluxo normal */ }
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=3', { updateViaCache: 'none' }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=10', { updateViaCache: 'none' }).catch(() => {});
   });
 }

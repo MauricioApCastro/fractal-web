@@ -179,6 +179,26 @@ function voltar() {
 }
 
 /* ============================================================
+ * Voltar unificado (teclado e botão do celular)
+ * Devolve true quando o app tratou o comando.
+ * Devolve false na lista de projetos, para o app poder fechar.
+ * ============================================================ */
+function tratarVoltar() {
+  if (!$('#sheet-overlay').hidden) { fecharSheet(); return true; }
+  if (!$('#modal-overlay').hidden) { resolverModal(null); return true; }
+  if (Estado.tela === 'anexos') {
+    mostrarTela('flor');
+    renderizarFlor();
+    return true;
+  }
+  if (Estado.tela === 'flor') { voltar(); return true; }
+  return false;
+}
+
+// Usado pelo MainActivity no Android para o botão voltar do aparelho.
+window.__fractalVoltar = tratarVoltar;
+
+/* ============================================================
  * LISTA DE PROJETOS
  * ============================================================ */
 
@@ -923,11 +943,58 @@ function abrirAnexos(item) {
   renderizarAnexos();
 }
 
+const ICONES_ANEXO = {
+  imagem:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="4.5" width="18" height="15" rx="2.6"/>' +
+    '<circle cx="8.7" cy="10" r="1.6"/>' +
+    '<path d="M4 17l4.6-4.2a1.6 1.6 0 0 1 2.2 0L14 16"/>' +
+    '<path d="M13.2 15.2l1.8-1.7a1.6 1.6 0 0 1 2.2 0l2.8 2.6"/></svg>',
+  video:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="5" width="18" height="14" rx="2.6"/>' +
+    '<path d="M10.3 9.2l4.7 2.8-4.7 2.8z" fill="currentColor" stroke-width="1.2"/></svg>',
+  link:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M10.3 13.7a4 4 0 0 0 5.7 0l2.7-2.7a4 4 0 0 0-5.7-5.7l-1.2 1.2"/>' +
+    '<path d="M13.7 10.3a4 4 0 0 0-5.7 0l-2.7 2.7a4 4 0 0 0 5.7 5.7l1.2-1.2"/></svg>',
+  arquivo:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M14 3.5H7.8A2.3 2.3 0 0 0 5.5 5.8v12.4a2.3 2.3 0 0 0 2.3 2.3h8.4a2.3 2.3 0 0 0 2.3-2.3V8z"/>' +
+    '<path d="M14 3.5V8h4.5"/><path d="M9 12.6h6"/><path d="M9 16h4"/></svg>',
+};
+
+function iconeAnexo(tipo) {
+  return ICONES_ANEXO[tipo] || ICONES_ANEXO.arquivo;
+}
+
+// URLs das miniaturas da renderizacao atual, para liberar memoria ao redesenhar.
+let urlsMiniaturas = [];
+
+function soltarMiniaturas() {
+  urlsMiniaturas.forEach(url => URL.revokeObjectURL(url));
+  urlsMiniaturas = [];
+}
+
+async function aplicarMiniatura(el, anexo) {
+  if (!el || anexo.tipo !== 'imagem' || !anexo.arquivo) return;
+  try {
+    const blob = await Storage.pegarArquivo(anexo.id);
+    if (!blob || !el.isConnected) return;
+    const url = URL.createObjectURL(blob);
+    urlsMiniaturas.push(url);
+    el.style.backgroundImage = 'url("' + url + '")';
+    el.classList.add('com-foto');
+  } catch (err) { /* sem miniatura: segue com o icone */ }
+}
+
 function renderizarAnexos() {
   const miolo = Estado.anexosDe;
   if (!miolo) { irParaLista(); return; }
 
   $('#anexos-titulo').innerHTML = '<b>' + escapeHtml(Estado.anexosTitulo) + '</b>';
+
+  soltarMiniaturas();
 
   const container = $('#anexos-container');
   const vazio = $('#anexos-vazio');
@@ -939,31 +1006,46 @@ function renderizarAnexos() {
 
   lista.forEach(anexo => {
     const el = document.createElement('div');
-    el.className = 'item-anexo';
+    el.className = 'item-anexo tipo-' + (anexo.tipo || 'arquivo');
 
-    const etiqueta = document.createElement('span');
-    etiqueta.className = 'etiqueta-anexo ' + anexo.tipo;
-    etiqueta.textContent = rotuloAnexo(anexo.tipo);
+    const miniatura = document.createElement('div');
+    miniatura.className = 'miniatura-anexo tipo-' + (anexo.tipo || 'arquivo');
+    miniatura.innerHTML = iconeAnexo(anexo.tipo);
+    aplicarMiniatura(miniatura, anexo);
 
     const dados = document.createElement('div');
     dados.className = 'dados-anexo';
+
     const nome = document.createElement('div');
     nome.className = 'nome';
     nome.textContent = anexo.nome || (ehLink(anexo.valor) ? anexo.valor : 'anexo');
+
     const valor = document.createElement('div');
     valor.className = 'valor';
     valor.textContent = anexo.valor || '';
     if (valor.textContent && valor.textContent !== nome.textContent) dados.appendChild(valor);
-    const data = document.createElement('div');
-    data.className = 'data';
-    data.textContent = anexo.adicionado ? dataAmigavel(anexo.adicionado) : '';
-    if (data.textContent) dados.appendChild(data);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta-anexo';
+    const etiqueta = document.createElement('span');
+    etiqueta.className = 'etiqueta-anexo ' + anexo.tipo;
+    etiqueta.textContent = rotuloAnexo(anexo.tipo);
+    meta.appendChild(etiqueta);
+    if (anexo.adicionado) {
+      const data = document.createElement('span');
+      data.className = 'data';
+      data.textContent = dataAmigavel(anexo.adicionado);
+      meta.appendChild(data);
+    }
+
     dados.insertBefore(nome, dados.firstChild);
+    dados.appendChild(meta);
 
     const remover = document.createElement('button');
     remover.className = 'botao-remover-anexo';
-    remover.textContent = '\u00D7';
+    remover.innerHTML = '&times;';
     remover.title = 'Remover';
+    remover.setAttribute('aria-label', 'Remover anexo');
     remover.addEventListener('click', e => {
       e.stopPropagation();
       confirmar('Remover anexo', 'Remover "' + (anexo.nome || 'anexo') + '" deste item?', async () => {
@@ -975,7 +1057,7 @@ function renderizarAnexos() {
       });
     });
 
-    el.appendChild(etiqueta);
+    el.appendChild(miniatura);
     el.appendChild(dados);
     el.appendChild(remover);
     el.addEventListener('click', () => abrirAnexo(anexo));
@@ -1240,6 +1322,31 @@ function wire() {
 
   const canvasFlor = $('#flor-canvas');
   let arrasto = null;
+  const ponteiros = new Map();
+  let pinca = null;
+
+  function dadosPinca() {
+    const lista = Array.from(ponteiros.values());
+    if (lista.length < 2) return null;
+    return {
+      distancia: Math.hypot(lista[0].x - lista[1].x, lista[0].y - lista[1].y),
+      centro: { x: (lista[0].x + lista[1].x) / 2, y: (lista[0].y + lista[1].y) / 2 }
+    };
+  }
+
+  function iniciarArrastoUnico() {
+    const lista = Array.from(ponteiros.values());
+    arrasto = lista.length === 1
+      ? {
+        id: lista[0].id,
+        inicioX: lista[0].x,
+        inicioY: lista[0].y,
+        panX: Estado.panX,
+        panY: Estado.panY,
+        ativo: false
+      }
+      : null;
+  }
 
   canvasFlor.addEventListener('wheel', e => {
     if (e.deltaY === 0) return;
@@ -1249,23 +1356,43 @@ function wire() {
 
   canvasFlor.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    ponteiros.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
+
+    // Pinça: vale mesmo sem transbordo, porque serve para aproximar.
+    if (ponteiros.size >= 2) {
+      arrasto = null;
+      pinca = dadosPinca();
+      canvasFlor.classList.remove('arrastando');
+      Estado.arrastouFlor = true;
+      return;
+    }
+
     const viewport = $('#flor-viewport');
     const temOverflow = viewport.offsetWidth > canvasFlor.clientWidth - 16 ||
       viewport.offsetHeight > canvasFlor.clientHeight - 16;
-    if (!temOverflow) return;
-
-    arrasto = {
-      id: e.pointerId,
-      inicioX: e.clientX,
-      inicioY: e.clientY,
-      panX: Estado.panX,
-      panY: Estado.panY,
-      ativo: false
-    };
     Estado.arrastouFlor = false;
+    if (!temOverflow) { arrasto = null; return; }
+    iniciarArrastoUnico();
   });
 
   canvasFlor.addEventListener('pointermove', e => {
+    if (!ponteiros.has(e.pointerId)) return;
+    ponteiros.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
+
+    if (ponteiros.size >= 2) {
+      const atual = dadosPinca();
+      if (pinca && atual && pinca.distancia > 0) {
+        const fator = atual.distancia / pinca.distancia;
+        if (Number.isFinite(fator) && fator > 0) {
+          alterarZoom(fator, atual.centro);
+          Estado.arrastouFlor = true;
+        }
+      }
+      pinca = atual;
+      e.preventDefault();
+      return;
+    }
+
     if (!arrasto || arrasto.id !== e.pointerId) return;
     const dx = e.clientX - arrasto.inicioX;
     const dy = e.clientY - arrasto.inicioY;
@@ -1285,13 +1412,22 @@ function wire() {
   });
 
   function finalizarArrasto(e) {
-    if (!arrasto || (e && arrasto.id !== e.pointerId)) return;
-    const id = arrasto.id;
+    if (e && e.pointerId !== undefined) ponteiros.delete(e.pointerId);
+    else ponteiros.clear();
+
+    // Ainda ha dois dedos: a pinça continua.
+    if (ponteiros.size >= 2) { pinca = dadosPinca(); return; }
+    pinca = null;
+
+    // Sobrou um dedo: recomeca o arraste da posicao atual, sem salto.
+    if (ponteiros.size === 1) {
+      Estado.arrastouFlor = true;
+      iniciarArrastoUnico();
+      return;
+    }
+
     arrasto = null;
     canvasFlor.classList.remove('arrastando');
-    try {
-      if (canvasFlor.hasPointerCapture(id)) canvasFlor.releasePointerCapture(id);
-    } catch (_) {}
     if (e && e.type === 'pointercancel') Estado.arrastouFlor = false;
   }
 
@@ -1314,6 +1450,10 @@ function wire() {
     if (Estado.itemPai && Estado.itemPai.meta) editarMetaItem(Estado.itemPai);
   });
 
+  document.querySelectorAll('[data-icone]').forEach(el => {
+    el.innerHTML = iconeAnexo(el.dataset.icone);
+  });
+
   document.querySelectorAll('[data-anexo-tipo]').forEach(b => {
     b.addEventListener('click', () => fluxoAdicionarAnexo(b.dataset.anexoTipo));
   });
@@ -1326,9 +1466,7 @@ function wire() {
 
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (!$('#sheet-overlay').hidden) fecharSheet();
-    else if (!$('#modal-overlay').hidden) resolverModal(null);
-    else if (Estado.tela === 'flor') voltar();
+    if (tratarVoltar()) e.preventDefault();
   });
 
   if ('ResizeObserver' in window) {

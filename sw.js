@@ -12,16 +12,16 @@
  *    em segundo plano.
  * ============================================================ */
 
-const CACHE = 'fractal-web-v3';
+const CACHE = 'fractal-v10';
 
 const CORE = [
   './',
-  './?v=3',
+  './?v=10',
   './index.html',
-  './manifest.json?v=3',
-  './css/styles.css?v=3',
-  './js/storage.js?v=3',
-  './js/app.js?v=3',
+  './manifest.json?v=10',
+  './css/styles.css?v=10',
+  './js/storage.js?v=10',
+  './js/app.js?v=10',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
@@ -39,9 +39,8 @@ self.addEventListener('install', event => {
 
 async function ativarServiceWorker() {
   const keys = await caches.keys();
-  const desteApp = k => k === 'fractal-v2' || k.startsWith('fractal-web-');
-  const haviaVersaoAnterior = keys.some(k => desteApp(k) && k !== CACHE);
-  await Promise.all(keys.filter(k => desteApp(k) && k !== CACHE).map(k => caches.delete(k)));
+  const haviaVersaoAnterior = keys.some(k => k.startsWith('fractal-') && k !== CACHE);
+  await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
   await self.clients.claim();
 
   if (haviaVersaoAnterior) {
