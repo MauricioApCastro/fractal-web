@@ -595,14 +595,22 @@ function renderizarFlor() {
   aplicarEscala();
 }
 
+/* Faixa de deslocamento do grafico.
+   Antes era um limite simetrico em torno do centro: isso centralizava a
+   Flor a cada gesto, perdia o ponto focal da pinca e travava o arraste
+   quando o conteudo cabia na tela.
+   Agora so e preciso garantir que uma margem do conteudo fique visivel,
+   o que deixa o arraste livre sem perder o grafico de vista. */
+const MARGEM_PAN = 40;
+
 function limitarPan(valor, tamanho, disponivel) {
-  const diferenca = tamanho - disponivel;
-  if (diferenca <= 0) return (disponivel - tamanho) / 2;
-  const limite = diferenca / 2;
-  return Math.max(-limite, Math.min(limite, valor));
+  const min = MARGEM_PAN - tamanho;
+  const max = disponivel - MARGEM_PAN;
+  if (min > max) return (disponivel - tamanho) / 2;
+  return Math.max(min, Math.min(max, valor));
 }
 
-function posicionarFlor() {
+function posicionarFlor(limitar = true) {
   const canvasEl = $('#flor-canvas');
   const viewport = $('#flor-viewport');
   if (!canvasEl || !viewport) return;
@@ -611,8 +619,13 @@ function posicionarFlor() {
   const disponivelAltura = Math.max(1, canvasEl.clientHeight - 16);
   const largura = viewport.offsetWidth;
   const altura = viewport.offsetHeight;
-  Estado.panX = limitarPan(Estado.panX, largura, disponivelLargura);
-  Estado.panY = limitarPan(Estado.panY, altura, disponivelAltura);
+  // Durante o zoom com ponto focal o pan calculado e exato: limitar aqui
+  // devolveria o grafico para o centro e a pinca pareceria focar sempre o
+  // circulo do meio.
+  if (limitar) {
+    Estado.panX = limitarPan(Estado.panX, largura, disponivelLargura);
+    Estado.panY = limitarPan(Estado.panY, altura, disponivelAltura);
+  }
   viewport.style.transform = 'translate(' + Estado.panX + 'px,' + Estado.panY + 'px)';
   canvasEl.classList.toggle(
     'ampliado',
@@ -660,12 +673,15 @@ function aplicarEscala(preservarPonto = false, ponto = null) {
   const larguraEscalada = Estado.larguraCanvas * escala;
   const alturaEscalada = Estado.alturaCanvas * escala;
 
-  if (preservarPonto && alvoX !== null && alvoY !== null) {
+  const temPonto = preservarPonto && alvoX !== null && alvoY !== null;
+  if (temPonto) {
+    // Resolve o pan para que o conteudo sob o dedo fique sob o dedo.
     Estado.panX = alvoX - origemX - focoX * escala;
     Estado.panY = alvoY - origemY - focoY * escala;
   } else {
-    Estado.panX = 0;
-    Estado.panY = 0;
+    // Sem ponto (entrada em uma tela): centraliza o conteudo.
+    Estado.panX = (disponivelLargura - larguraEscalada) / 2;
+    Estado.panY = (disponivelAltura - alturaEscalada) / 2;
   }
 
   viewport.style.width = larguraEscalada + 'px';
@@ -673,7 +689,7 @@ function aplicarEscala(preservarPonto = false, ponto = null) {
   area.style.transform = 'scale(' + escala + ')';
   Estado.escalaAplicada = escala;
   Estado.escalaTelaAplicada = escalaTela;
-  posicionarFlor();
+  posicionarFlor(!temPonto);
 }
 
 function alterarZoom(fator, ponto = null) {
@@ -1367,11 +1383,9 @@ function wire() {
       return;
     }
 
-    const viewport = $('#flor-viewport');
-    const temOverflow = viewport.offsetWidth > canvasFlor.clientWidth - 16 ||
-      viewport.offsetHeight > canvasFlor.clientHeight - 16;
+    // O arraste e liberado mesmo sem transbordo: com o limite de pan
+    // corrigido, sempre ha para onde mover o grafico.
     Estado.arrastouFlor = false;
-    if (!temOverflow) { arrasto = null; return; }
     iniciarArrastoUnico();
   });
 
@@ -1396,7 +1410,7 @@ function wire() {
     if (!arrasto || arrasto.id !== e.pointerId) return;
     const dx = e.clientX - arrasto.inicioX;
     const dy = e.clientY - arrasto.inicioY;
-    if (!arrasto.ativo && Math.hypot(dx, dy) < 12) return;
+    if (!arrasto.ativo && Math.hypot(dx, dy) < 8) return;
 
     if (!arrasto.ativo) {
       arrasto.ativo = true;
@@ -1428,6 +1442,9 @@ function wire() {
 
     arrasto = null;
     canvasFlor.classList.remove('arrastando');
+    // A pinca posiciona sem limite para o ponto focal ser exato; aqui o pan
+    // volta a ser limitado, para o grafico nao ficar quase fora da tela.
+    posicionarFlor();
     if (e && e.type === 'pointercancel') Estado.arrastouFlor = false;
   }
 

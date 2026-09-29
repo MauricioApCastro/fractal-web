@@ -12,16 +12,16 @@
  *    em segundo plano.
  * ============================================================ */
 
-const CACHE = 'fractal-v10';
+const CACHE = 'fractal-v11';
 
 const CORE = [
   './',
-  './?v=10',
+  './?v=11',
   './index.html',
-  './manifest.json?v=10',
-  './css/styles.css?v=10',
-  './js/storage.js?v=10',
-  './js/app.js?v=10',
+  './manifest.json?v=11',
+  './css/styles.css?v=11',
+  './js/storage.js?v=11',
+  './js/app.js?v=11',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
