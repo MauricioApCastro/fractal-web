@@ -69,7 +69,7 @@ button {
 .brand h1 { margin: 0; font-size: 22px; letter-spacing: 0.5px; }
 .brand p { margin: 2px 0 0; font-size: 12px; color: var(--texto-fraco); }
 
-.brand-circulo {
+.brand-fractal {
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -105,6 +105,8 @@ button {
 .btn-secundario { background: var(--cartao); border-color: var(--borda); }
 .btn-texto { background: transparent; color: var(--texto-fraco); text-decoration: underline; }
 .btn-pequeno { padding: 6px 12px; font-size: 12px; }
+.btn-perigo { background: transparent; border-color: #8b2f3a; color: #ff8a95; }
+.btn-perigo:disabled { opacity: 0.6; }
 
 .btn-icon {
   background: var(--cartao);
@@ -191,7 +193,7 @@ button {
 }
 .vazio-titulo { font-size: 16px; color: var(--texto); font-weight: 600; margin: 10px 0 4px; }
 .vazio-sub { font-size: 13px; margin: 0; }
-.vazio-circulo {
+.vazio-fractal {
   width: 64px;
   height: 64px;
   margin: 0 auto;
@@ -209,6 +211,11 @@ button {
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   text-align: center;
   border-top: 1px solid var(--borda);
+}
+.versao {
+  font-size: 11px;
+  color: var(--texto-fraco);
+  opacity: 0.7;
 }
 
 /* ============ FLOR ============ */
@@ -244,7 +251,7 @@ button {
   touch-action: none;
 }
 
-.conexoes-circulo {
+.conexoes-fractal {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -254,16 +261,11 @@ button {
   pointer-events: none;
 }
 
-.linha-circulo {
+.linha-fractal {
   stroke: rgba(230, 237, 243, 0.38);
   stroke-width: 2;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
-}
-.linha-circulo.concluida {
-  stroke: rgba(255, 255, 255, 0.9);
-  stroke-width: 3;
-  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.6));
 }
 
 .centro, .item {
@@ -301,12 +303,10 @@ button {
 }
 
 .item.concluido {
-  border: 3px solid #FFFFFF;
-  box-shadow:
-    0 0 0 3px rgba(255, 255, 255, 0.16),
-    0 0 22px rgba(255, 255, 255, 0.45);
+  /* Sem anel: só base dessaturada + nome tachado + selo verde + data. */
+  filter: saturate(0.6) brightness(0.85);
 }
-.item.concluido .nome-circulo {
+.item.concluido .nome-fractal {
   text-decoration: line-through;
   text-decoration-thickness: 2px;
 }
@@ -323,38 +323,51 @@ button {
   justify-content: center;
   border: 3px solid var(--fundo);
   border-radius: 50%;
-  background: #FFFFFF;
-  color: #0B1020;
+  background: #16A34A;
+  color: #FFFFFF;
   font-size: 15px;
   font-weight: 800;
   line-height: 1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-.centro.projeto-concluido {
-  border-color: #FFFFFF;
-  box-shadow: 0 0 24px rgba(255, 255, 255, 0.55);
-}
 .centro.meta-centro {
-  border-color: rgba(255, 216, 107, 0.9);
+  background: transparent;
+  border: 2px solid rgba(255, 216, 107, 0.9);
+  color: #FFD86B;
+}
+.centro.meta-centro .nome-fractal,
+.centro.meta-centro .sub-fractal {
+  color: #FFD86B;
 }
 
-.item.meta::before {
+.item {
+  background: transparent;
+  border: 2px solid rgba(255, 216, 107, 0.9);
+  color: #FFD86B;
+}
+.item .nome-fractal,
+.item .sub-fractal {
+  color: #FFD86B;
+}
+.item::before {
   content: "";
   position: absolute;
-  inset: -6px;
+  inset: -10px;
   z-index: 0;
   border-radius: 50%;
-  background: conic-gradient(#FBBF24 var(--progresso-meta, 0%), rgba(255, 255, 255, 0.14) 0);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
+  background: conic-gradient(
+    rgba(255, 216, 107, 1) var(--progresso-meta, 0%),
+    rgba(255, 216, 107, 0.12) var(--progresso-meta, 0%),
+    rgba(255, 216, 107, 0.12) 100%
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 6px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 6px));
   pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(255, 216, 107, 0.4));
 }
-.item.meta.concluido::before {
-  background: conic-gradient(#FFFFFF 100%, rgba(255, 255, 255, 0.14) 0);
-}
-.item.meta > .nome-circulo,
-.item.meta > .sub-circulo {
+.item > .nome-fractal,
+.item > .sub-fractal {
   position: relative;
   z-index: 1;
 }
@@ -387,7 +400,8 @@ button {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #FFFFFF, #B9C4D4);
+  /* Preenchimento escuro sobre o centro dourado: contraste em vez de branco lavado. */
+  background: linear-gradient(90deg, #243154, #0B1020);
   transition: width 0.2s ease;
 }
 
@@ -470,7 +484,7 @@ button {
   }
 }
 
-.centro .nome-circulo, .item .nome-circulo {
+.centro .nome-fractal, .item .nome-fractal {
   font-weight: 700;
   font-size: 13px;
   line-height: 1.15;
@@ -481,11 +495,11 @@ button {
   word-break: break-word;
 }
 
-.centro .nome-circulo { font-size: 15px; }
-.centro .sub-circulo { font-size: 9px; opacity: 0.7; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item .sub-circulo { font-size: 9px; opacity: 0.75; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.centro .nome-fractal { font-size: 15px; }
+.centro .sub-fractal { font-size: 9px; opacity: 0.7; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .sub-fractal { font-size: 9px; opacity: 0.75; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.menu-circulo {
+.menu-fractal {
   position: absolute;
   top: 8px;
   right: 10px;
@@ -493,6 +507,9 @@ button {
   font-weight: 800;
   opacity: 0.55;
   line-height: 1;
+}
+.item .menu-fractal {
+  display: none;
 }
 
 /* botão flutuante */
@@ -689,22 +706,41 @@ button {
   background: rgba(0, 0, 0, 0.62);
   align-items: flex-end;
   justify-content: center;
+  /* Espaço do teclado: --kb-local (focus) tem prioridade sobre --kb (contínuo). */
+  padding-bottom: var(--kb-local, var(--kb, 0px));
 }
 .modal-overlay:not([hidden]) { display: flex; }
 .modal-overlay[hidden] { display: none; }
 
+/* O .modal e' coluna: so o corpo rola. Assim a barra de acoes fica sempre
+ * visivel, mesmo com o teclado aberto encolhendo a altura util -- o botao de
+ * salvar nao some abaixo da dobra. */
 .modal {
   width: min(520px, 94vw);
-  max-height: 88vh;
-  overflow-y: auto;
+  max-height: calc(88vh - var(--kb-local, var(--kb, 0px)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--cartao);
   border: 1px solid var(--borda);
   border-radius: 20px 20px 0 0;
-  padding: 20px;
+  padding: 20px 20px 0;
   animation: sobe 0.18s ease-out;
 }
 @media (min-width: 640px) {
   .modal { border-radius: 20px; margin-bottom: 12vh; }
+}
+
+/* Unica area que rola. min-height:0 impede o flex de esticar o corpo alem do
+ * limite do pai (sem isso o max-height do .modal nao segura). */
+.modal-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* O padding vai no corpo: assim a rolagem nao encosta no texto nas bordas
+   * e o fundo do texto continua pareja ate o limite. */
+  padding-bottom: 4px;
+  overscroll-behavior: contain;
 }
 
 @keyframes sobe {
@@ -712,7 +748,9 @@ button {
   to { transform: translateY(0); opacity: 1; }
 }
 
-.modal h2 { margin: 0 0 14px; font-size: 20px; }
+/* Titulo e acoes nao encolhem: flex-shrink:0 garante que o conteudo rolavel
+ * absorve a reducao de altura, nunca os botoes. */
+.modal h2 { margin: 0 0 14px; font-size: 20px; flex-shrink: 0; }
 .modal label { display: block; font-size: 12px; color: var(--texto-fraco); margin: 10px 0 4px; }
 
 .campo {
@@ -728,7 +766,20 @@ button {
 textarea.campo { min-height: 110px; resize: vertical; }
 .campo:focus { outline: 2px solid var(--dourado-b); }
 
-.modal-acoes { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+/* Barra fixa no rodape do dialogo. O padding inferior mora aqui (o .modal
+ * tem padding-bottom:0) para o conteudo rolavel passar por baixo das bordas
+ * sem que o fundo do texto fique cortado no limite. */
+.modal-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+  flex-shrink: 0;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+  /* Borda sutil separando a barra da area rolavel quando ha scroll. */
+  background: linear-gradient(to bottom, transparent, var(--cartao) 30%);
+  box-shadow: 0 -10px 18px -12px rgba(0, 0, 0, 0.55);
+}
 
 /* ============ BOTTOM SHEET ============ */
 .sheet {
@@ -765,7 +816,7 @@ textarea.campo { min-height: 110px; resize: vertical; }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(26px + env(safe-area-inset-bottom, 0px) + var(--kb-local, var(--kb, 0px)));
   transform: translateX(-50%);
   background: var(--cartao);
   border: 1px solid var(--borda);
@@ -820,3 +871,130 @@ textarea.campo { min-height: 110px; resize: vertical; }
   .acoes-lista .btn { flex: 1; }
   .fab { right: 8px; }
 }
+/* ============ CONTA / SINCRONIZACAO ============ */
+.conta-conteudo {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.conta-cartao {
+  background: var(--cartao);
+  border: 1px solid var(--borda);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.conta-titulo {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.conta-texto {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--texto-fraco);
+}
+
+.conta-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.conta-rotulo {
+  font-size: 13px;
+  color: var(--texto-fraco);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.conta-status {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  background: rgba(139, 152, 168, 0.12);
+  color: var(--texto-fraco);
+}
+.conta-status[data-situacao="sincronizado"] { color: #6FD08C; border-color: rgba(45, 164, 78, 0.5); background: rgba(45, 164, 78, 0.12); }
+.conta-status[data-situacao="pendente"] { color: var(--dourado-a); border-color: rgba(255, 216, 107, 0.4); background: rgba(255, 216, 107, 0.10); }
+.conta-status[data-situacao="erro"] { color: #FF8A8A; border-color: rgba(194, 30, 30, 0.55); background: rgba(194, 30, 30, 0.12); }
+
+.conta-mensagem {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--texto-fraco);
+  line-height: 1.45;
+}
+
+.conta-mensagem.conta-erro { color: #FF8A8A; }
+
+.conta-avisos:empty { display: none; }
+
+.conta-aviso-item {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid #E8A400;
+  background: rgba(232, 164, 0, 0.10);
+  border-radius: 4px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--texto);
+}
+
+.conta-ultima {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--texto-fraco);
+  opacity: 0.8;
+}
+
+.conta-email {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--texto);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.conta-google {
+  display: flex;
+  justify-content: flex-start;
+  min-height: 44px;
+}
+
+.conta-aviso {
+  margin: 0;
+  font-size: 13px;
+  color: var(--texto-fraco);
+  line-height: 1.5;
+}
+
+.conta-aviso code {
+  background: rgba(139, 152, 168, 0.15);
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.conta-botoes {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toast-erro { border-color: rgba(194, 30, 30, 0.7); color: #FFD9D9; }

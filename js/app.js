@@ -7,6 +7,9 @@ document.documentElement.dataset.loadedjs = '1';
 
 const $ = sel => document.querySelector(sel);
 
+/* Versão visível no rodapé (bump a cada release p/ identificar o build). */
+const VERSAO_APP = '25';
+
 const Estado = {
   projetos: [],
   atual: null,        // projeto em uso
@@ -36,6 +39,20 @@ async function guardar() {
   if (!Estado.atual) return;
   Estado.atual.modificado = new Date().toISOString();
   await Storage.salvarProjeto(Estado.atual);
+  sincronizarProjetoNaLista();
+  // Se houver conta do Google conectada, agenda o envio para o Drive.
+  if (typeof Sync !== 'undefined' && Sync && Sync.marcarSujo) Sync.marcarSujo();
+}
+
+/* O projeto em edicao e outra instancia da que esta no cache da lista.
+ * Guardar o mesmo objeto aqui mantem nome, contagem de itens, anexos e a
+ * data relativa em dia quando o usuario volta para o menu de projetos. */
+function sincronizarProjetoNaLista() {
+  const projeto = Estado.atual;
+  if (!projeto || !projeto.id || !Array.isArray(Estado.projetos)) return;
+  const i = Estado.projetos.findIndex(p => p.id === projeto.id);
+  if (i >= 0) Estado.projetos[i] = projeto;
+  else Estado.projetos.push(projeto);
 }
 
 function toast(msg) {
@@ -47,7 +64,7 @@ function toast(msg) {
 }
 
 /* ============================================================
- * Som de toque nos círculos (Web Audio - sem arquivos)
+ * Som de toque nos fractais (Web Audio - sem arquivos)
  * ============================================================ */
 
 const Som = (() => {
@@ -186,6 +203,11 @@ function voltar() {
 function tratarVoltar() {
   if (!$('#sheet-overlay').hidden) { fecharSheet(); return true; }
   if (!$('#modal-overlay').hidden) { resolverModal(null); return true; }
+  if (Estado.tela === 'conta') {
+    mostrarTela('lista');
+    renderizarLista();
+    return true;
+  }
   if (Estado.tela === 'anexos') {
     mostrarTela('flor');
     renderizarFlor();
@@ -296,7 +318,7 @@ async function recarregarProjetos() {
 }
 
 /* ============================================================
- * FLOR (CÍRCULOS)
+ * FLOR (FRACTAL)
  * ============================================================ */
 
 const TAM_ITEM = 118;
@@ -329,11 +351,17 @@ function normalizarMeta(meta) {
     ? (/^\d{4}-\d{2}-\d{2}$/.test(prazoBruto) ? new Date(prazoBruto + 'T12:00:00') : new Date(prazoBruto))
     : null;
   const prazo = dataPrazo && !isNaN(dataPrazo.getTime()) ? dataLocalISO(dataPrazo) : somarDias(inicio, dias);
+  const prazoManualBruto = meta.prazoManual || '';
+  const dataPrazoManual = /^\d{4}-\d{2}-\d{2}$/.test(prazoManualBruto)
+    ? new Date(prazoManualBruto + 'T12:00:00')
+    : null;
+  const prazoManual = dataPrazoManual && !isNaN(dataPrazoManual.getTime()) ? dataLocalISO(dataPrazoManual) : '';
   return {
     dias,
     progresso,
     inicio,
     prazo,
+    prazoManual,
   };
 }
 
@@ -348,9 +376,69 @@ function formatarDataMeta(dataISO) {
   return data.toLocaleDateString('pt-BR');
 }
 
+function diasAtePrazo(prazoISO) {
+  if (!prazoISO || !/^\d{4}-\d{2}-\d{2}$/.test(prazoISO)) return null;
+  const hoje = new Date(dataLocalISO() + 'T12:00:00');
+  const prazo = new Date(prazoISO + 'T12:00:00');
+  return Math.round((prazo - hoje) / 86400000);
+}
+
+function infoPrazoMeta(meta) {
+  if (!meta) return '';
+  const prazoRef = meta.prazoManual || meta.prazo;
+  const dias = diasAtePrazo(prazoRef);
+  if (dias === null) return 'Prazo: ' + formatarDataMeta(prazoRef);
+  const concluida = meta.progresso >= meta.dias;
+  if (concluida) return 'Prazo: ' + formatarDataMeta(prazoRef);
+  if (dias < 0) return 'Atraso: ' + Math.abs(dias) + (Math.abs(dias) === 1 ? ' dia' : ' dias');
+  if (dias === 0) return 'Prazo: hoje';
+  return 'Restam ' + dias + (dias === 1 ? ' dia' : ' dias');
+}
+
 function itemConcluido(item) {
   const meta = normalizarMeta(item.meta);
   return item.concluido === true || (meta && meta.progresso >= meta.dias);
+}
+
+function progressoAgregado(item) {
+  if (!item || !item.miolo) return null;
+  let totalDias = 0;
+  let totalProgresso = 0;
+  const miolo = item.miolo;
+  for (const sub of miolo.itens) {
+    const m = normalizarMeta(sub.meta);
+    if (m) {
+      totalDias += m.dias;
+      totalProgresso += m.progresso;
+    }
+    if (sub.miolo) {
+      const subAgregado = progressoAgregado(sub);
+      if (subAgregado) {
+        totalDias += subAgregado.dias;
+        totalProgresso += subAgregado.progresso;
+      }
+    }
+  }
+  if (totalDias === 0) return null;
+  return { dias: totalDias, progresso: totalProgresso };
+}
+
+/* Marca/desmarca guardando a data de conclusão (concluidoEm, yyyy-mm-dd).
+   Reabrir limpa a data; concluir de novo registra a nova data. */
+function marcarConcluido(item, sim) {
+  const era = item.concluido === true;
+  item.concluido = sim === true;
+  if (item.concluido && !era) item.concluidoEm = dataLocalISO();
+  if (!item.concluido && era) item.concluidoEm = null;
+}
+
+function textoConclusao(item) {
+  let dataFmt = '';
+  try {
+    const d = new Date((item.concluidoEm || '') + 'T12:00:00');
+    if (!isNaN(d.getTime())) dataFmt = ' ' + d.toLocaleDateString('pt-BR');
+  } catch (e) { /* sem data: mostra só "concluído" */ }
+  return 'concluído' + dataFmt;
 }
 
 function renderizarFlor() {
@@ -423,7 +511,7 @@ function renderizarFlor() {
 
   /* conexões entre o centro e os itens */
   const conexoes = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  conexoes.setAttribute('class', 'conexoes-circulo');
+  conexoes.setAttribute('class', 'conexoes-fractal');
   conexoes.setAttribute('viewBox', '0 0 ' + largura + ' ' + altura);
   conexoes.setAttribute('aria-hidden', 'true');
   conexoes.setAttribute('focusable', 'false');
@@ -436,22 +524,27 @@ function renderizarFlor() {
       (metaAtiva && metaAtiva.progresso >= metaAtiva.dias)) {
     centro.classList.add('projeto-concluido');
   }
-  centro.style.background = 'linear-gradient(135deg, ' + COR_MIOLO[0] + ', ' + COR_MIOLO[1] + ')';
+  centro.style.background = metaAtiva ? 'transparent' : 'linear-gradient(135deg, ' + COR_MIOLO[0] + ', ' + COR_MIOLO[1] + ')';
   centro.style.left = (cx - TAM_CENTRO / 2) + 'px';
   centro.style.top = (cy - TAM_CENTRO / 2) + 'px';
 
   const cnome = document.createElement('div');
-  cnome.className = 'nome-circulo';
+  cnome.className = 'nome-fractal';
   cnome.textContent = miolo.nome || 'Sem nome';
   centro.appendChild(cnome);
 
   const nAnexos = (miolo.anexos || []).length;
   const csub = document.createElement('div');
-  csub.className = 'sub-circulo';
+  csub.className = 'sub-fractal';
   const infoCentro = [];
   if (metaAtiva) {
-    infoCentro.push(metaAtiva.progresso + '/' + metaAtiva.dias + ' dias');
-    infoCentro.push('prazo: ' + formatarDataMeta(metaAtiva.prazo));
+    infoCentro.push((metaAtiva.dias - metaAtiva.progresso) + ' dias');
+    infoCentro.push(infoPrazoMeta(metaAtiva));
+    if (metaAtiva.progresso >= metaAtiva.dias) {
+      const dtPai = Estado.itemPai && Estado.itemPai.concluidoEm
+        ? ' ' + formatarDataMeta(Estado.itemPai.concluidoEm) : '';
+      infoCentro.push('concluído' + dtPai);
+    }
   } else if (n > 0) {
     infoCentro.push(nConcluidos + '/' + n + (nConcluidos === 1 ? ' concluído' : ' concluídos'));
   }
@@ -473,7 +566,11 @@ function renderizarFlor() {
     centro.appendChild(progresso);
   }
 
-  centro.addEventListener('click', () => { Som.centro(); editarMiolo(); });
+  centro.addEventListener('click', () => {
+    Som.centro();
+    if (metaAtiva && Estado.itemPai) editarMetaItem(Estado.itemPai);
+    else editarMiolo();
+  });
   centro.addEventListener('contextmenu', e => {
     e.preventDefault();
     mostrarSheet('Centro: ' + (miolo.nome || 'Sem nome'), [
@@ -484,7 +581,7 @@ function renderizarFlor() {
   });
   area.appendChild(centro);
 
-  /* itens em círculo */
+  /* itens em fractal */
   posicoes.forEach(({ item, dx, dy }) => {
     const meta = normalizarMeta(item.meta);
     const concluido = itemConcluido(item);
@@ -497,7 +594,7 @@ function renderizarFlor() {
       const ux = dx / distancia;
       const uy = dy / distancia;
       const linha = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      linha.setAttribute('class', concluido ? 'linha-circulo concluida' : 'linha-circulo');
+      linha.setAttribute('class', 'linha-fractal');
       linha.setAttribute('x1', cx + ux * (TAM_CENTRO / 2 + 2));
       linha.setAttribute('y1', cy + uy * (TAM_CENTRO / 2 + 2));
       linha.setAttribute('x2', itemX - ux * (TAM_ITEM / 2 + 2));
@@ -505,18 +602,28 @@ function renderizarFlor() {
       conexoes.appendChild(linha);
     }
 
-    const [ca, cb] = corDoItem(item.cor);
+    // Meta tem cor padrão (dourado da marca); item comum usa a paleta.
+    const [ca, cb] = meta ? COR_MIOLO : corDoItem(item.cor);
+    const agregado = progressoAgregado(item);
     const el = document.createElement('div');
     el.className = 'item';
     if (meta) el.classList.add('meta');
+    if (agregado) el.classList.add('tem-metas');
     if (concluido) el.classList.add('concluido');
-    el.style.background = 'linear-gradient(135deg, ' + ca + ', ' + cb + ')';
+    el.style.background = 'transparent';
     el.style.left = x + 'px';
     el.style.top = y + 'px';
     if (meta) el.style.setProperty('--progresso-meta', (meta.progresso / meta.dias * 100) + '%');
+    else if (agregado) el.style.setProperty('--progresso-meta', (agregado.progresso / agregado.dias * 100) + '%');
+    else if (concluido) el.style.setProperty('--progresso-meta', '100%');
+    else if (item.miolo && item.miolo.itens.length > 0) {
+      const total = item.miolo.itens.length;
+      const feitos = item.miolo.itens.filter(i => itemConcluido(i)).length;
+      el.style.setProperty('--progresso-meta', (feitos / total * 100) + '%');
+    }
 
     const nome = document.createElement('div');
-    nome.className = 'nome-circulo';
+    nome.className = 'nome-fractal';
     nome.textContent = item.nome || '...';
     el.appendChild(nome);
 
@@ -540,18 +647,24 @@ function renderizarFlor() {
     const subAnexos = item.miolo ? item.miolo.anexos.length : 0;
     const textoItens = subItens === 1 ? '1 item' : subItens + ' itens';
     let subTxt = '';
-    if (meta) subTxt = meta.progresso + '/' + meta.dias + ' dias';
+    if (meta) subTxt = 'restam ' + (meta.dias - meta.progresso) + ' dias';
+    else if (agregado) subTxt = Math.round(agregado.progresso / agregado.dias * 100) + '%';
     else if (subItens > 0 && subAnexos > 0) subTxt = textoItens + ' • ' + subAnexos;
     else if (subAnexos > 0) subTxt = subAnexos + ' anexo(s)';
     else if (subItens > 0) subTxt = textoItens;
+    if (concluido) {
+      // Concluído mostra a data; em meta o "x/y dias" sai (anel/selo já indicam).
+      const base = meta ? '' : subTxt;
+      subTxt = (base ? base + ' • ' : '') + textoConclusao(item);
+    }
 
     const sub = document.createElement('div');
-    sub.className = 'sub-circulo';
+    sub.className = 'sub-fractal';
     sub.textContent = subTxt;
     el.appendChild(sub);
 
     const ordem = document.createElement('span');
-    ordem.className = 'menu-circulo';
+    ordem.className = 'menu-fractal';
     ordem.textContent = '\u22EF';
     el.appendChild(ordem);
 
@@ -596,11 +709,10 @@ function renderizarFlor() {
 }
 
 /* Faixa de deslocamento do grafico.
-   Antes era um limite simetrico em torno do centro: isso centralizava a
-   Flor a cada gesto, perdia o ponto focal da pinca e travava o arraste
-   quando o conteudo cabia na tela.
-   Agora so e preciso garantir que uma margem do conteudo fique visivel,
-   o que deixa o arraste livre sem perder o grafico de vista. */
+   Antes era um limite simetrico em torno do centro: a cada gesto ele
+   centralizava a Flor, perdia o ponto focal da pinca e travava o arraste
+   (um arrasto de 400px acabava valendo 25px). Agora so exigimos que uma
+   margem do conteudo continue visivel, o que mantem o arraste livre. */
 const MARGEM_PAN = 40;
 
 function limitarPan(valor, tamanho, disponivel) {
@@ -619,9 +731,8 @@ function posicionarFlor(limitar = true) {
   const disponivelAltura = Math.max(1, canvasEl.clientHeight - 16);
   const largura = viewport.offsetWidth;
   const altura = viewport.offsetHeight;
-  // Durante o zoom com ponto focal o pan calculado e exato: limitar aqui
-  // devolveria o grafico para o centro e a pinca pareceria focar sempre o
-  // circulo do meio.
+  // No zoom ancorado o pan e exato: limitar aqui devolveria o grafico para
+  // o centro e a pinca pareceria focar sempre o fractal do meio.
   if (limitar) {
     Estado.panX = limitarPan(Estado.panX, largura, disponivelLargura);
     Estado.panY = limitarPan(Estado.panY, altura, disponivelAltura);
@@ -679,7 +790,7 @@ function aplicarEscala(preservarPonto = false, ponto = null) {
     Estado.panX = alvoX - origemX - focoX * escala;
     Estado.panY = alvoY - origemY - focoY * escala;
   } else {
-    // Sem ponto (entrada em uma tela): centraliza o conteudo.
+    // Sem ponto (ao abrir uma tela): centraliza o conteudo.
     Estado.panX = (disponivelLargura - larguraEscalada) / 2;
     Estado.panY = (disponivelAltura - alturaEscalada) / 2;
   }
@@ -703,8 +814,11 @@ function renderizarControleMeta(meta) {
   controle.hidden = !meta;
   if (!meta) return;
 
-  $('#meta-progresso-valor').textContent = meta.progresso + '/' + meta.dias + ' dias';
-  $('#meta-progresso-prazo').textContent = 'Prazo: ' + formatarDataMeta(meta.prazo);
+  const completo = meta.progresso >= meta.dias;
+  const dtPai = Estado.itemPai && Estado.itemPai.concluidoEm
+    ? formatarDataMeta(Estado.itemPai.concluidoEm) : '';
+  $('#meta-progresso-valor').textContent = completo ? 'concluído' : (meta.dias - meta.progresso) + ' dias';
+  $('#meta-progresso-prazo').textContent = completo && dtPai ? 'em ' + dtPai : infoPrazoMeta(meta);
   $('#meta-menos').disabled = meta.progresso <= 0;
   $('#meta-mais').disabled = meta.progresso >= meta.dias;
   $('#meta-concluir').disabled = meta.progresso >= meta.dias;
@@ -718,9 +832,11 @@ async function registrarProgressoMeta(delta) {
   if (novoProgresso === meta.progresso) return;
   meta.progresso = novoProgresso;
   item.meta = meta;
-  item.concluido = novoProgresso >= meta.dias;
+  const concluiu = novoProgresso >= meta.dias;
+  marcarConcluido(item, concluiu);
   await guardar();
   renderizarFlor();
+  if (concluiu) toast('Meta concluída.');
 }
 
 async function concluirMetaAtual() {
@@ -729,7 +845,7 @@ async function concluirMetaAtual() {
   const meta = normalizarMeta(item.meta);
   meta.progresso = meta.dias;
   item.meta = meta;
-  item.concluido = true;
+  marcarConcluido(item, true);
   await guardar();
   renderizarFlor();
   toast('Meta concluída.');
@@ -744,12 +860,14 @@ function editarMiolo() {
   editar('Editar centro', miolo.nome, miolo.anotacoes, (nome, notas) => {
     miolo.nome = nome;
     miolo.anotacoes = notas;
+    // O centro da raiz tambem da o nome ao projeto na lista de projetos.
+    if (Estado.atual && miolo === Estado.atual.raiz) Estado.atual.nome = nome;
     guardar();
     renderizarFlor();
   });
 }
 
-function abrirEditorMeta(titulo, nome, dias, inicio, okTexto) {
+function abrirEditorMeta(titulo, nome, dias, inicio, okTexto, prazoManual) {
   const hoje = dataLocalISO();
   const prazo = somarDias(inicio || hoje, dias || 30);
   const resultado = abrirModal(
@@ -760,6 +878,8 @@ function abrirEditorMeta(titulo, nome, dias, inicio, okTexto) {
     '<input class="campo" id="meta-dias" type="number" min="1" max="3650" step="1" value="' + escapeHtml(dias || 30) + '">' +
     '<label for="meta-inicio">Data de início</label>' +
     '<input class="campo" id="meta-inicio" type="date" value="' + escapeHtml(inicio || hoje) + '">' +
+    '<label for="meta-prazo-manual">Prazo manual (opcional)</label>' +
+    '<input class="campo" id="meta-prazo-manual" type="date" value="' + escapeHtml(prazoManual || '') + '">' +
     '<p id="meta-previsao" style="margin:14px 0 0;color:#8B98A8;font-size:12px">Prazo previsto: ' + escapeHtml(formatarDataMeta(prazo)) + '</p>',
     okTexto
   );
@@ -774,8 +894,21 @@ function abrirEditorMeta(titulo, nome, dias, inicio, okTexto) {
     }
     previsao.textContent = 'Prazo previsto: ' + formatarDataMeta(somarDias(inicioInformado, diasInformados));
   };
+  const atualizarDiasPrazo = () => {
+    const prazoManual = $('#meta-prazo-manual').value;
+    const inicioInformado = $('#meta-inicio').value || hoje;
+    if (!prazoManual || !/^\d{4}-\d{2}-\d{2}$/.test(prazoManual)) return;
+    const inicio = new Date(inicioInformado + 'T12:00:00');
+    const prazo = new Date(prazoManual + 'T12:00:00');
+    const diff = Math.round((prazo - inicio) / 86400000);
+    if (diff >= 1) {
+      $('#meta-dias').value = diff;
+      atualizarPrevisao();
+    }
+  };
   $('#meta-dias').addEventListener('input', atualizarPrevisao);
   $('#meta-inicio').addEventListener('input', atualizarPrevisao);
+  $('#meta-prazo-manual').addEventListener('input', atualizarDiasPrazo);
 
   return resultado.then(res => {
     if (res !== 'ok') return null;
@@ -783,6 +916,7 @@ function abrirEditorMeta(titulo, nome, dias, inicio, okTexto) {
       nome: ($('#meta-nome').value || '').trim(),
       dias: Math.floor(Number($('#meta-dias').value)),
       inicio: $('#meta-inicio').value || hoje,
+      prazoManual: $('#meta-prazo-manual').value || '',
     };
   });
 }
@@ -804,6 +938,7 @@ async function novoConfirmacaoMeta(dados) {
   const miolo = mioloAtual();
   const item = novoItem(nome, miolo.itens.length);
   item.meta = criarMeta(dias, dados.inicio);
+  item.meta.prazoManual = dados.prazoManual || '';
   miolo.itens.push(item);
   await guardar();
   renderizarFlor();
@@ -813,7 +948,7 @@ async function novoConfirmacaoMeta(dados) {
 async function editarMetaItem(item) {
   const meta = normalizarMeta(item.meta);
   if (!meta) return;
-  const dados = await abrirEditorMeta('Editar meta', item.nome, meta.dias, meta.inicio, 'Salvar');
+  const dados = await abrirEditorMeta('Editar meta', item.nome, meta.dias, meta.inicio, 'Salvar', meta.prazoManual);
   if (!dados) return;
   const nome = String(dados.nome || '').trim();
   const dias = Math.floor(Number(dados.dias));
@@ -825,17 +960,18 @@ async function editarMetaItem(item) {
   meta.progresso = Math.min(meta.progresso, dias);
   meta.inicio = dados.inicio;
   meta.prazo = somarDias(meta.inicio, dias);
+  meta.prazoManual = dados.prazoManual || '';
   item.nome = nome;
   item.miolo.nome = nome;
   item.meta = meta;
-  item.concluido = meta.progresso >= meta.dias;
+  marcarConcluido(item, meta.progresso >= meta.dias);
   await guardar();
   renderizarFlor();
   toast('Meta atualizada.');
 }
 
 async function transformarEmMeta(item) {
-  const dados = await abrirEditorMeta('Transformar em meta', item.nome, 30, dataLocalISO(), 'Criar meta');
+  const dados = await abrirEditorMeta('Transformar em meta', item.nome, 30, dataLocalISO(), 'Criar meta', '');
   if (!dados) return;
   const nome = String(dados.nome || '').trim();
   const dias = Math.floor(Number(dados.dias));
@@ -846,7 +982,8 @@ async function transformarEmMeta(item) {
   item.nome = nome;
   item.miolo.nome = nome;
   item.meta = criarMeta(dias, dados.inicio);
-  item.concluido = false;
+  item.meta.prazoManual = dados.prazoManual || '';
+  marcarConcluido(item, false);
   await guardar();
   renderizarFlor();
   toast('Item transformado em meta.');
@@ -869,7 +1006,7 @@ function mostrarOpcoesItem(item) {
             acao: async () => {
               meta.progresso = Math.max(0, meta.dias - 1);
               item.meta = meta;
-              item.concluido = false;
+              marcarConcluido(item, false);
               await guardar();
               renderizarFlor();
               toast('Meta reaberta.');
@@ -881,7 +1018,7 @@ function mostrarOpcoesItem(item) {
             acao: async () => {
               meta.progresso = meta.dias;
               item.meta = meta;
-              item.concluido = true;
+              marcarConcluido(item, true);
               Som.centro();
               await guardar();
               renderizarFlor();
@@ -892,7 +1029,7 @@ function mostrarOpcoesItem(item) {
         ? {
             texto: 'Reabrir item',
             acao: async () => {
-              item.concluido = false;
+              marcarConcluido(item, false);
               await guardar();
               renderizarFlor();
               toast('Item reaberto.');
@@ -903,7 +1040,7 @@ function mostrarOpcoesItem(item) {
             cor: 'sucesso',
             acao: async () => {
               Som.centro();
-              item.concluido = true;
+              marcarConcluido(item, true);
               await guardar();
               renderizarFlor();
               toast('Item concluído.');
@@ -1097,7 +1234,12 @@ async function abrirAnexo(anexo) {
     return;
   }
   const blob = anexo.arquivo ? await Storage.pegarArquivo(anexo.id) : null;
-  if (!blob) { toast('Arquivo não encontrado.'); return; }
+  if (!blob) {
+    toast(anexo.arquivo && typeof GoogleAuth !== 'undefined' && GoogleAuth.logado()
+      ? 'Arquivo ainda não baixado. Sincronize para buscar do Drive.'
+      : 'Arquivo não encontrado.');
+    return;
+  }
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank', 'noopener');
   setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -1176,6 +1318,7 @@ function pedirLink(titulo, tipo) {
 let modalResolve = null;
 
 function abrirModal(titulo, corpoHTML, okTexto) {
+
   $('#modal-titulo').textContent = titulo;
   $('#modal-corpo').innerHTML = corpoHTML;
   $('#modal-ok').textContent = okTexto || 'OK';
@@ -1185,6 +1328,7 @@ function abrirModal(titulo, corpoHTML, okTexto) {
 }
 
 function resolverModal(valor) {
+
   const r = modalResolve;
   modalResolve = null;
   $('#modal-overlay').hidden = true;
@@ -1288,6 +1432,7 @@ function importarFluxo() {
         cont++;
       }
       await recarregarProjetos();
+      if (typeof Sync !== 'undefined' && Sync && Sync.marcarSujo) Sync.marcarSujo();
       toast('Importado: ' + cont + ' projeto(s).');
     } catch (err) {
       toast('Não foi possível importar: ' + err.message);
@@ -1311,6 +1456,7 @@ function wire() {
       };
       await Storage.salvarProjeto(projeto);
       await recarregarProjetos();
+      if (typeof Sync !== 'undefined' && Sync && Sync.marcarSujo) Sync.marcarSujo();
       irParaFlor(projeto);
     });
   });
@@ -1383,8 +1529,8 @@ function wire() {
       return;
     }
 
-    // O arraste e liberado mesmo sem transbordo: com o limite de pan
-    // corrigido, sempre ha para onde mover o grafico.
+    // O arraste vale mesmo sem transbordo: com o limite corrigido sempre ha
+    // para onde mover o grafico.
     Estado.arrastouFlor = false;
     iniciarArrastoUnico();
   });
@@ -1442,15 +1588,19 @@ function wire() {
 
     arrasto = null;
     canvasFlor.classList.remove('arrastando');
-    // A pinca posiciona sem limite para o ponto focal ser exato; aqui o pan
-    // volta a ser limitado, para o grafico nao ficar quase fora da tela.
-    posicionarFlor();
+    // Nao reaplica o limite de pan aqui. Medido no emulador: durante a pinca
+    // o ponto focal e exato, e limitar no fim do gesto puxava o grafico de
+    // volta (63 px de salto) destruindo o foco. O limite continua valendo
+    // durante o arraste com um dedo, em posicionarFlor().
     if (e && e.type === 'pointercancel') Estado.arrastouFlor = false;
   }
 
   canvasFlor.addEventListener('pointerup', finalizarArrasto);
   canvasFlor.addEventListener('pointercancel', finalizarArrasto);
-  canvasFlor.addEventListener('lostpointercapture', finalizarArrasto);
+  // NAO escuta 'lostpointercapture' aqui. No WebView do Android ele dispara
+  // logo apos o setPointerCapture do primeiro pointermove; tratar isso como
+  // fim de gesto zerava o arasto no primeiro movimento. A captura e liberada
+  // sozinha em pointerup/pointercancel.
   window.addEventListener('pointerup', finalizarArrasto);
   window.addEventListener('pointercancel', finalizarArrasto);
   canvasFlor.addEventListener('click', e => {
@@ -1477,7 +1627,18 @@ function wire() {
 
   $('#sheet-fechar').addEventListener('click', fecharSheet);
   $('#sheet-overlay').addEventListener('click', e => { if (e.target.id === 'sheet-overlay') fecharSheet(); });
-  $('#modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') resolverModal(null); });
+  $('#modal-overlay').addEventListener('click', e => {
+    if (e.target.id !== 'modal-overlay') return;
+    // Com foco dentro do diálogo, o fundo nunca cancela (só botão/voltar).
+    // + ignora o clique do próprio toque que focou (pulo entre down e up).
+    const focado = document.activeElement;
+    const focadoNoModal = focado && document.getElementById('modal-overlay').contains(focado);
+    const recente = Date.now() - ultimoFocusModal <= 1500;
+
+    if (focadoNoModal || recente) return;
+
+    resolverModal(null);
+  });
   $('#modal-ok').addEventListener('click', () => resolverModal('ok'));
   $('#modal-cancelar').addEventListener('click', () => resolverModal(null));
 
@@ -1495,6 +1656,71 @@ function wire() {
   window.addEventListener('resize', () => {
     if (Estado.tela === 'flor') aplicarEscala(true);
   });
+
+  /* Teclado virtual 1: espelha a altura no --kb enquanto ele anima. */
+  (function () {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const medir = () => {
+      const kb = Math.max(0, (window.innerHeight || 0) - vv.height);
+      document.documentElement.style.setProperty('--kb', kb + 'px');
+    };
+    vv.addEventListener('resize', medir);
+    vv.addEventListener('scroll', medir);
+    medir();
+  })();
+
+  /* Teclado virtual 2: garante o campo visível mesmo quando a janela não
+     redimensiona (WebView/tablet). Mede, estima em último caso e levanta o
+     overlay via --kb-local; só em ponteiro touch. */
+  let ultimoFocusModal = 0;
+  (function () {
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    const ehCampo = el => el && (el.tagName === 'TEXTAREA' ||
+      (el.tagName === 'INPUT' && /^(text|number|date|password|search|tel|url|email)$/i.test(el.type || 'text')));
+    const medirKb = () => {
+      const layoutH = window.innerHeight || 0;
+      const vv = window.visualViewport;
+      const visH = vv ? vv.height : layoutH;
+      // Arredonda: resíduos subpixel (ex. 0.14px) não são teclado.
+      let kb = Math.max(0, Math.round(layoutH - visH));
+      if (kb <= 0 && touch) {
+        const telaH = (window.screen && window.screen.height) || 0;
+        // Janela cheia = teclado por cima -> estima 40% da altura.
+        if (!(telaH > layoutH * 1.15)) kb = Math.round(layoutH * 0.4);
+      }
+      return kb;
+    };
+    document.addEventListener('focusin', e => {
+      const campo = e.target && ehCampo(e.target) ? e.target : null;
+      const overlay = e.target && e.target.closest ? e.target.closest('.modal-overlay') : null;
+      if (!campo || !overlay) return;
+      // Marca o instante: o diálogo pode mudar de lugar (topo) entre o
+      // pressionar e o soltar do dedo; o clique no fundo nesse intervalo
+      // deve ser ignorado para não cancelar o diálogo sem querer.
+      ultimoFocusModal = Date.now();
+      const kb = medirKb();
+      overlay.style.setProperty('--kb-local', kb + 'px');
+
+      setTimeout(() => {
+        overlay.style.setProperty('--kb-local', medirKb() + 'px');
+        try { campo.scrollIntoView({ block: 'nearest' }); } catch (err) {}
+      }, 350);
+    });
+    document.addEventListener('focusout', () => {
+      // Adia o retorno visual: tirar o ajuste na hora move o diálogo entre
+      // o pressionar e o soltar do dedo e o toque no OK cai no vazio
+      // (vira "precisa de 2 OKs"). Só recolhe se o foco saiu do diálogo.
+      setTimeout(() => {
+        const ae = document.activeElement;
+        if (ae && ae.closest && ae.closest('.modal-overlay')) return;
+        document.querySelectorAll('.modal-overlay').forEach(o => {
+          o.style.removeProperty('--kb-local');
+        });
+      }, 400);
+    });
+  })();
+
 }
 
 /* ============================================================
@@ -1511,6 +1737,8 @@ async function iniciar() {
     document.documentElement.dataset.listed = '1';
     mostrarTela('lista');
     renderizarLista();
+    const marcadorVersao = $('#versao-app');
+    if (marcadorVersao) marcadorVersao.textContent = 'v' + VERSAO_APP;
     document.documentElement.dataset.ready = '1';
   } catch (err) {
     document.documentElement.dataset.initerr = String(err && err.message || err);

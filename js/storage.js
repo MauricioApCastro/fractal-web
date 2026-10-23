@@ -5,6 +5,7 @@ document.documentElement.dataset.loadedstorage = '1';
  * Storage: IndexedDB.
  *  - loja "projetos": chave = id do projeto, valor = projeto
  *  - loja "arquivos": chave = id do anexo, valor = Blob
+ *  - loja "config":   chave = nome, valor = configuração (tokens, etc.)
  * ============================================================ */
 
 function novoId() {
@@ -18,7 +19,7 @@ const Storage = (() => {
   function openDB() {
     if (dbP) return dbP;
     dbP = new Promise((resolve, reject) => {
-      const req = indexedDB.open('fractal', 1);
+      const req = indexedDB.open('fractal', 2);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains('projetos')) {
@@ -26,6 +27,9 @@ const Storage = (() => {
         }
         if (!db.objectStoreNames.contains('arquivos')) {
           db.createObjectStore('arquivos');
+        }
+        if (!db.objectStoreNames.contains('config')) {
+          db.createObjectStore('config');
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -58,6 +62,22 @@ const Storage = (() => {
     guardarArquivo: (id, blob) => run('arquivos', 'readwrite', s => s.put(blob, id)),
     pegarArquivo: id => run('arquivos', 'readonly', s => s.get(id)),
     apagarArquivo: id => run('arquivos', 'readwrite', s => s.delete(id)),
+
+    // ---------- configuração (tokens, preferências) ----------
+    guardarConfig: (chave, valor) => run('config', 'readwrite', s => s.put(valor, chave)),
+    pegarConfig: chave => run('config', 'readonly', s => s.get(chave)),
+    apagarConfig: chave => run('config', 'readwrite', s => s.delete(chave)),
+
+    // ---------- apagar tudo (LGPD, art. 18) ----------
+    limparTudo: () => openDB().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(['projetos', 'arquivos', 'config'], 'readwrite');
+      tx.objectStore('projetos').clear();
+      tx.objectStore('arquivos').clear();
+      tx.objectStore('config').clear();
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    })),
   };
 })();
 
@@ -103,7 +123,8 @@ function metaDoJson(d) {
       prazo = data.getFullYear() + '-' + String(data.getMonth() + 1).padStart(2, '0') + '-' + String(data.getDate()).padStart(2, '0');
     }
   }
-  return { dias, progresso, inicio, prazo };
+  const prazoManual = d.prazoManual || d.PrazoManual || '';
+  return { dias, progresso, inicio, prazo, prazoManual };
 }
 
 /* Traduz o JSON do desktop (.fractal, PascalCase) ou o formato interno. */
@@ -125,6 +146,7 @@ function mioloDoJson(d) {
       nome: pNome,
       cor: cor,
       concluido: p.concluido === true || p.Concluido === true || p.feito === true || p.Feito === true,
+      concluidoEm: p.concluidoEm != null ? p.concluidoEm : p.ConcluidoEm != null ? p.ConcluidoEm : null,
       meta: metaDoJson(p.meta || p.Meta),
       anotacoes: p.anotacoes != null ? p.anotacoes : p.Anotacoes != null ? p.Anotacoes : '',
       miolo: pMiolo ? mioloDoJson(pMiolo) : novoMiolo(pNome),
@@ -167,11 +189,13 @@ function mioloParaJson(m) {
       Cor: p.cor,
       Concluido: p.concluido === true,
       Feito: p.concluido === true,
+      ConcluidoEm: p.concluidoEm || null,
       Meta: p.meta ? {
         Dias: p.meta.dias,
         Progresso: p.meta.progresso,
         Inicio: p.meta.inicio,
         Prazo: p.meta.prazo,
+        PrazoManual: p.meta.prazoManual || '',
       } : null,
       Miolo: p.miolo ? mioloParaJson(p.miolo) : null,
     })),
@@ -330,6 +354,6 @@ function registrarServiceWorker() {
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
   } catch (err) { /* segue o fluxo normal */ }
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=11', { updateViaCache: 'none' }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=14', { updateViaCache: 'none' }).catch(() => {});
   });
 }

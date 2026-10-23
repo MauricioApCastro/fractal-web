@@ -2,18 +2,18 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Fractal - organize projetos, tarefas, notas e ideias em um formato visual de círculos, com anexos.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="description" content="Fractal - organize projetos, tarefas, notas e ideias em um formato visual de fractais, com anexos.">
   <meta name="theme-color" content="#0B1020">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Fractal">
-  <link rel="manifest" href="manifest.json?v=11">
+  <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <title>Fractal - Planejador Visual</title>
-  <link rel="stylesheet" href="css/styles.css?v=11">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
@@ -21,13 +21,14 @@
   <section id="tela-lista" class="tela ativa">
     <header class="topbar-lista">
       <div class="brand">
-        <div class="brand-circulo"></div>
+        <div class="brand-fractal"></div>
         <div>
           <h1>Fractal</h1>
-          <p>Planejamento e ideias em círculos</p>
+          <p>Planejamento e ideias em fractais</p>
         </div>
       </div>
       <div class="acoes-lista">
+        <button class="btn btn-secundario" id="btn-conta">Conta</button>
         <button class="btn btn-secundario" id="btn-importar">Importar</button>
         <button class="btn btn-primario" id="btn-novo-projeto">Novo projeto</button>
       </div>
@@ -35,7 +36,7 @@
 
     <div id="lista-container" class="lista-container">
       <div id="lista-vazia" class="vazio">
-        <div class="vazio-circulo"></div>
+        <div class="vazio-fractal"></div>
         <p class="vazio-titulo">Nenhum projeto ainda.</p>
         <p class="vazio-sub">Toque em "Novo projeto" para começar.</p>
       </div>
@@ -45,12 +46,16 @@
       <button class="btn btn-texto" id="btn-exportar-tudo">Exportar todos (backup)</button>
       <span class="sep-rodape">•</span>
       <button class="btn btn-texto" id="btn-som">Som: ligado</button>
+      <span class="sep-rodape">•</span>
+      <span class="versao" id="conta-resumo">Conta: local</span>
+      <span class="sep-rodape">•</span>
+      <span class="versao" id="versao-app"></span>
     </div>
 
     <input type="file" id="input-importar" accept=".fractal,.json,application/json" hidden>
   </section>
 
-  <!-- ============ TELA: FLOR (CÍRCULOS) ============ -->
+  <!-- ============ TELA: FLOR (FRACTAL) ============ -->
   <section id="tela-flor" class="tela">
     <header class="topbar">
       <button class="btn-icon" id="btn-voltar" title="Voltar" aria-label="Voltar">&#8592;</button>
@@ -116,11 +121,72 @@
     <input type="file" id="input-arquivo" hidden>
   </section>
 
+  <!-- ============ TELA: CONTA / SINCRONIZAÇÃO ============ -->
+  <section id="tela-conta" class="tela">
+    <header class="topbar">
+      <button class="btn-icon" id="conta-voltar" title="Voltar" aria-label="Voltar">&#8592;</button>
+      <div class="breadcrumb">Conta e sincronização</div>
+      <span></span>
+    </header>
+
+    <div class="conta-conteudo">
+      <div class="conta-cartao">
+        <div class="conta-linha">
+          <span class="conta-rotulo">Estado</span>
+          <span class="conta-status" id="conta-status" data-situacao="local">Só neste aparelho</span>
+        </div>
+        <p class="conta-mensagem" id="conta-mensagem"></p>
+        <p class="conta-ultima" id="conta-ultima"></p>
+        <p class="conta-ultima" id="conta-armazenamento"></p>
+        <div class="conta-avisos" id="conta-avisos"></div>
+        <p class="conta-email" id="conta-email"></p>
+      </div>
+
+      <div class="conta-cartao" id="conta-deslogado">
+        <h2 class="conta-titulo">Entrar com o Google</h2>
+        <p class="conta-texto">
+          Entre para levar seus projetos para o Google Drive e usá-los no
+          celular, no tablet e no computador. Sem conta, o Fractal continua
+          funcionando normalmente só neste aparelho.
+        </p>
+        <div id="conta-google" class="conta-google"></div>
+        <button class="btn btn-primario" id="btn-entrar-nativo" hidden>Entrar com o Google</button>
+      </div>
+
+      <div class="conta-cartao" id="conta-logado" hidden>
+        <h2 class="conta-titulo">Sincronização</h2>
+        <p class="conta-texto">
+          Os projetos ficam no Drive, na pasta oculta do app, e os anexos
+          (imagens, vídeos, arquivos) vão para a pasta <b>Fractal</b>,
+          que você pode abrir e baixar pelo Drive do computador ou do celular.
+          Cada anexo é enviado uma única vez.
+        </p>
+        <div class="conta-botoes">
+          <button class="btn btn-primario" id="btn-sincronizar">Sincronizar agora</button>
+          <button class="btn btn-secundario" id="btn-sair">Sair da conta</button>
+        </div>
+      </div>
+
+      <div class="conta-cartao" id="conta-dados">
+        <h2 class="conta-titulo">Seus dados</h2>
+        <p class="conta-texto">
+          O Fractal não envia seus dados para o desenvolvedor: tudo fica no
+          seu Google Drive e neste aparelho. Você pode apagar tudo a
+          qualquer momento — os projetos, os anexos, a pasta
+          <b>Fractal</b> no Drive e a sua sessão.
+        </p>
+        <div class="conta-botoes">
+          <button class="btn btn-perigo" id="btn-apagar-dados">Apagar meus dados</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ MODAIS ============ -->
   <div class="modal-overlay" id="modal-overlay" hidden>
     <div class="modal">
       <h2 id="modal-titulo"></h2>
-      <div id="modal-corpo"></div>
+      <div class="modal-corpo" id="modal-corpo"></div>
       <div class="modal-acoes">
         <button class="btn btn-secundario" id="modal-cancelar">Cancelar</button>
         <button class="btn btn-primario" id="modal-ok">OK</button>
@@ -140,7 +206,29 @@
 
   <div id="erro-tela" class="erro-tela" hidden></div>
 
-  <script src="js/storage.js?v=11"></script>
-  <script src="js/app.js?v=11"></script>
+  <!-- Recebe o resultado do login Google vindo do app nativo (Android).
+       Fica antes de todos os scripts para existir mesmo se o redirect
+       chegar enquanto a pagina ainda esta carregando. -->
+  <script>
+    window.__fractalGoogleAuthFila = [];
+    window.__fractalGoogleAuthEntregar = function (payload) {
+      window.__fractalGoogleAuthFila.push(payload);
+      if (window.__fractalGoogleAuthProcessar) window.__fractalGoogleAuthProcessar(payload);
+      // Avisa o app nativo que o resultado chegou (ele nao reenvia).
+      try {
+        if (window.fractalBridge && window.fractalBridge.onGoogleAuthRecebido) {
+          window.fractalBridge.onGoogleAuthRecebido();
+        }
+      } catch (e) { }
+    };
+  </script>
+
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/google-auth.js"></script>
+  <script src="js/drive-sync.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/conta.js"></script>
 </body>
 </html>
