@@ -89,6 +89,55 @@ const Sync = (() => {
     return JSON.stringify(a || []) === JSON.stringify(b || []);
   }
 
+  /* ---------- lápides (exclusões) ---------- */
+
+  /* Apagar um projeto não pode ser "só sumir": o merge une as listas e o
+     projeto voltaria do Drive na sincronização seguinte. Cada exclusão vira
+     uma lápide { id: { em: ISO } } que viaja no índice e é aplicada nos
+     outros aparelhos. A lápide vence a versão do projeto; se o projeto foi
+     EDITADO depois da exclusão, a edição vence (o projeto volta). */
+  const CHAVE_EXCLUIDOS = 'projetos_excluidos';
+  const VALIDADE_LAPIDE_MS = 120 * 24 * 60 * 60 * 1000;   // 120 dias
+
+  async function lerExclusoes() {
+    try {
+      const m = await Storage.pegarConfig(CHAVE_EXCLUIDOS);
+      return (m && typeof m === 'object') ? m : {};
+    } catch (e) { return {}; }
+  }
+
+  function podarExclusoes(mapa) {
+    const limite = Date.now() - VALIDADE_LAPIDE_MS;
+    const saida = {};
+    Object.keys(mapa || {}).forEach(id => {
+      const em = Date.parse((mapa[id] && mapa[id].em) || '');
+      if (!isNaN(em) && em >= limite) saida[id] = mapa[id];
+    });
+    return saida;
+  }
+
+  /* Chamado pelo app quando o usuário apaga um projeto. */
+  async function registrarExclusao(id) {
+    if (!id) return;
+    const mapa = await lerExclusoes();
+    mapa[id] = { em: new Date().toISOString() };
+    await Storage.guardarConfig(CHAVE_EXCLUIDOS, podarExclusoes(mapa)).catch(() => {});
+    marcarSujo();
+  }
+
+  /* Une as lápides dos dois lados (a mais recente por id). */
+  function mesclarExclusoes(local, remoto) {
+    const saida = {};
+    [remoto, local].forEach(m => {
+      Object.keys(m || {}).forEach(id => {
+        const novo = m[id] || {};
+        const atual = saida[id];
+        if (!atual || String(novo.em || '') >= String(atual.em || '')) saida[id] = novo;
+      });
+    });
+    return saida;
+  }
+
   /* ---------- anexos ---------- */
 
   /* Todos os anexos de arquivo referenciados pelos projetos. */
@@ -112,6 +161,15 @@ const Sync = (() => {
     /* Grava a lista sincronizada no IndexedDB, sem apagar o que já
        estava lá (o merge já cuidou disso). */
     await Promise.all(projetos.map(p => Storage.salvarProjeto(p)));
+    /* Projeto que sumiu da lista foi apagado em outro aparelho: remove
+       também deste (é o que faz a exclusão "chegar" aqui). */
+    try {
+      const ids = new Set((projetos || []).map(p => p.id));
+      const locais = await Storage.listarProjetos();
+      for (const p of (locais || [])) {
+        if (!ids.has(p.id)) await Storage.apagarProjeto(p.id);
+      }
+    } catch (e) { /* sem lista local: segue */ }
     /* Atualiza a tela da lista (pode ter vindo projeto novo do Drive). */
     try {
       if (typeof recarregarProjetos === 'function') await recarregarProjetos();
@@ -141,8 +199,30 @@ const Sync = (() => {
       const projetosRemotos = (remoto && remoto.projetos) || [];
       const mesclados = mesclar(local, projetosRemotos);
 
+      /* --- exclusões (lápides) --- */
+      const exclusoesLocais = await lerExclusoes();
+      const excluidos = mesclarExclusoes(exclusoesLocais, (remoto && remoto.excluidos) || {});
+      const apagarIds = new Set();
+      mesclados.forEach(p => {
+        const lapide = excluidos[p.id];
+        if (!lapide) return;
+        if (String(lapide.em || '') >= String(p.modificado || '')) {
+          apagarIds.add(p.id);          /* exclusão mais nova: o projeto sai */
+        } else {
+          delete excluidos[p.id];       /* editado depois: a edição vence */
+        }
+      });
+      const finais = mesclados.filter(p => !apagarIds.has(p.id));
+      if (apagarIds.size) {
+        for (const id of apagarIds) {
+          await Storage.apagarProjeto(id).catch(() => {});
+        }
+      }
+      const excluidosPodados = podarExclusoes(excluidos);
+      await Storage.guardarConfig(CHAVE_EXCLUIDOS, excluidosPodados).catch(() => {});
+
       /* --- anexos --- */
-      const usados = anexosDosProjetos(mesclados);
+      const usados = anexosDosProjetos(finais);
       const indice = Object.assign({}, (remoto && remoto.anexos) || {});
       const pasta = await DriveSync.pastaAnexos(remoto && remoto.pastaAnexos);
       const arquivos = await DriveSync.listar(pasta.anexos);
@@ -241,9 +321,10 @@ const Sync = (() => {
 
       /* --- cota do Drive (o aviso de "quase cheio" já foi dado acima) --- */
 
-      const mudou = !remoto || !iguais(mesclados, projetosRemotos) ||
+      const mudou = !remoto || !iguais(finais, projetosRemotos) ||
         JSON.stringify(indice) !== JSON.stringify((remoto && remoto.anexos) || {}) ||
-        (remoto && remoto.pastaAnexos) !== pasta.anexos;
+        (remoto && remoto.pastaAnexos) !== pasta.anexos ||
+        JSON.stringify(excluidosPodados) !== JSON.stringify((remoto && remoto.excluidos) || {});
 
       if (mudou) {
         const documento = {
@@ -253,13 +334,14 @@ const Sync = (() => {
           dispositivo: config().nomeDispositivo || 'desconhecido',
           pastaAnexos: pasta.anexos,
           anexos: indice,
-          projetos: mesclados,
+          projetos: finais,
+          excluidos: excluidosPodados,
         };
         await DriveSync.enviar(arquivo ? arquivo.id : null, documento);
-        await aplicarProjetos(mesclados);
-      } else if (!iguais(local, mesclados)) {
+        await aplicarProjetos(finais);
+      } else if (!iguais(local, finais)) {
         /* O Drive está mais novo: copia para o aparelho. */
-        await aplicarProjetos(mesclados);
+        await aplicarProjetos(finais);
       }
 
       ultimo = new Date();
@@ -271,7 +353,12 @@ const Sync = (() => {
         'Sincronizado com o Google Drive.' + (partes.length ? ' ' + partes.join(', ') + '.' : ''));
       return status();
     } catch (err) {
-      const texto = (err && err.message) || 'Falha ao sincronizar.';
+      let texto = (err && err.message) || 'Falha ao sincronizar.';
+      /* 403 de escopo: o token nao tem o Drive. Explica o que fazer. */
+      if (/insufficient|scope|permiss/i.test(texto)) {
+        texto = 'O Google não liberou o acesso ao Drive. Abra o botão ' +
+          '"Autorizar o Drive" e marque TODAS as permissões na tela do Google.';
+      }
       definir('erro', texto);
       return status();
     } finally {
@@ -335,6 +422,7 @@ const Sync = (() => {
     iniciar,
     sincronizar,
     marcarSujo,
+    registrarExclusao,
     sair,
     apagarTudo,
     status,

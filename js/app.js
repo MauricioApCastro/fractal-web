@@ -8,7 +8,7 @@ document.documentElement.dataset.loadedjs = '1';
 const $ = sel => document.querySelector(sel);
 
 /* Versão visível no rodapé (bump a cada release p/ identificar o build). */
-const VERSAO_APP = '28';
+const VERSAO_APP = '29';
 
 const Estado = {
   projetos: [],
@@ -285,6 +285,8 @@ function renderizarLista() {
       e.stopPropagation();
       confirmar('Apagar projeto', 'Apagar permanentemente "' + (proj.nome || '') + '"?', async () => {
         await Storage.apagarProjeto(proj.id);
+        /* Lápide: leva a exclusão para os outros aparelhos. */
+        await Sync.registrarExclusao(proj.id).catch(() => {});
         await recarregarProjetos();
         toast('Projeto apagado.');
       });
@@ -300,6 +302,8 @@ function renderizarLista() {
       e.preventDefault();
       confirmar('Apagar projeto', 'Apagar permanentemente "' + (proj.nome || '') + '"?', async () => {
         await Storage.apagarProjeto(proj.id);
+        /* Lápide: leva a exclusão para os outros aparelhos. */
+        await Sync.registrarExclusao(proj.id).catch(() => {});
         await recarregarProjetos();
         toast('Projeto apagado.');
       });
