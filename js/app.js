@@ -8,7 +8,7 @@ document.documentElement.dataset.loadedjs = '1';
 const $ = sel => document.querySelector(sel);
 
 /* Versão visível no rodapé (bump a cada release p/ identificar o build). */
-const VERSAO_APP = '25';
+const VERSAO_APP = '28';
 
 const Estado = {
   projetos: [],

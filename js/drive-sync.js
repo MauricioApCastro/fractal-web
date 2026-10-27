@@ -98,14 +98,20 @@ const DriveSync = (() => {
   /* Envia (cria ou atualiza) o documento. */
   async function enviar(id, documento) {
     const conteudo = JSON.stringify(documento);
+    /* ATENCAO: o Drive NAO aceita o campo "parents" em update (PATCH).
+       Ele so pode ser definido na criacao (POST) ou via os parametros
+       addParents/removeParents. Mandar parents no PATCH devolve
+       403 "The parents field is not directly writable in update requests".
+       Era o erro do sync no navegador quando o indice ja existia
+       (criado pelo celular). */
     const meta = {
       name: arquivo(),
-      parents: ['appDataFolder'],
       appProperties: {
         rev: String(documento.rev || 0),
         atualizado: String(documento.atualizado || ''),
       },
     };
+    if (!id) meta.parents = ['appDataFolder'];
     const limite = 'fractal-upload-' + Math.random().toString(36).slice(2);
     const corpo =
       '--' + limite + '\r\n' +

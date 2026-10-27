@@ -12,7 +12,7 @@
  *    em segundo plano.
  * ============================================================ */
 
-const CACHE = 'fractal-v14';
+const CACHE = 'fractal-v15';
 
 const CORE = [
   './',
