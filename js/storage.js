@@ -127,40 +127,57 @@ function metaDoJson(d) {
   return { dias, progresso, inicio, prazo, prazoManual };
 }
 
+/* Arquivos importados vêm de fora: força os tipos que o app espera, para um
+ * .fractal malformado não quebrar a tela nem injetar valores estranhos. */
+const TIPOS_ANEXO = ['imagem', 'video', 'link', 'arquivo'];
+
+function textoDoJson(v, padrao) {
+  return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : padrao;
+}
+
+function listaDoJson(v) {
+  return Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : [];
+}
+
 /* Traduz o JSON do desktop (.fractal, PascalCase) ou o formato interno. */
 function mioloDoJson(d) {
-  const origem = d || {};
-  const nome = origem.nome != null ? origem.nome : origem.Nome != null ? origem.Nome : '';
-  const anotacoes = origem.anotacoes != null ? origem.anotacoes : origem.Anotacoes != null ? origem.Anotacoes : '';
-  const petalasSrc = origem.itens || origem.Petalas || [];
-  const anexosSrc = origem.anexos || origem.Anexos || [];
+  const origem = d && typeof d === 'object' ? d : {};
+  const nome = textoDoJson(origem.nome != null ? origem.nome : origem.Nome, '');
+  const anotacoes = textoDoJson(origem.anotacoes != null ? origem.anotacoes : origem.Anotacoes, '');
+  const petalasSrc = listaDoJson(origem.itens || origem.Petalas);
+  const anexosSrc = listaDoJson(origem.anexos || origem.Anexos);
 
   const miolo = novoMiolo(nome);
-  miolo.anotacoes = anotacoes || '';
+  miolo.anotacoes = anotacoes;
 
-  miolo.itens = (petalasSrc || []).map((p, i) => {
-    const cor = p.cor != null ? p.cor : p.Cor != null ? p.Cor : i % 10;
-    const pNome = p.nome != null ? p.nome : p.Nome != null ? p.Nome : 'Sem nome';
+  miolo.itens = petalasSrc.map((p, i) => {
+    const corBruta = Number(p.cor != null ? p.cor : p.Cor);
+    const cor = Number.isFinite(corBruta) ? Math.trunc(corBruta) : i % 10;
+    const pNome = textoDoJson(p.nome != null ? p.nome : p.Nome, 'Sem nome');
     const pMiolo = p.miolo || p.Miolo;
     return {
       nome: pNome,
       cor: cor,
       concluido: p.concluido === true || p.Concluido === true || p.feito === true || p.Feito === true,
-      concluidoEm: p.concluidoEm != null ? p.concluidoEm : p.ConcluidoEm != null ? p.ConcluidoEm : null,
+      concluidoEm: textoDoJson(p.concluidoEm != null ? p.concluidoEm : p.ConcluidoEm, null),
       meta: metaDoJson(p.meta || p.Meta),
-      anotacoes: p.anotacoes != null ? p.anotacoes : p.Anotacoes != null ? p.Anotacoes : '',
+      anotacoes: textoDoJson(p.anotacoes != null ? p.anotacoes : p.Anotacoes, ''),
       miolo: pMiolo ? mioloDoJson(pMiolo) : novoMiolo(pNome),
     };
   });
 
-  miolo.anexos = (anexosSrc || []).map(a => ({
-    id: novoId(),
-    nome: a.nome != null ? a.nome : a.Nome != null ? a.Nome : '',
-    tipo: (a.tipo != null ? a.tipo : a.Tipo || 'link'),
-    valor: a.valor != null ? a.valor : a.Valor != null ? a.Valor : '',
-    adicionado: a.adicionado || a.Adicionado || new Date().toISOString(),
-    arquivo: !ehLink(a.Valor != null ? a.Valor : a.valor),
-  }));
+  miolo.anexos = anexosSrc.map(a => {
+    const tipo = a.tipo != null ? a.tipo : a.Tipo;
+    const valor = textoDoJson(a.valor != null ? a.valor : a.Valor, '');
+    return {
+      id: novoId(),
+      nome: textoDoJson(a.nome != null ? a.nome : a.Nome, ''),
+      tipo: TIPOS_ANEXO.includes(tipo) ? tipo : 'link',
+      valor: valor,
+      adicionado: textoDoJson(a.adicionado || a.Adicionado, new Date().toISOString()),
+      arquivo: !ehLink(valor),
+    };
+  });
 
   return miolo;
 }
@@ -284,14 +301,15 @@ async function importarProjeto(dados) {
   const emb = origem.anexos_embedded || {};
 
   await percorrerAnexos(raiz, async (_m, a) => {
-    if (a.arquivo && emb[a.valor]) {
-      await Storage.guardarArquivo(a.id, dataURIParaBlob(emb[a.valor]));
+    const dataURI = Object.prototype.hasOwnProperty.call(emb, a.valor) ? emb[a.valor] : null;
+    if (a.arquivo && typeof dataURI === 'string' && dataURI.startsWith('data:')) {
+      await Storage.guardarArquivo(a.id, dataURIParaBlob(dataURI));
     }
   });
 
   const projeto = {
     id: novoId(),
-    nome: origem.Nome || origem.nome || 'Projeto importado',
+    nome: textoDoJson(origem.Nome || origem.nome, '') || 'Projeto importado',
     modificado: new Date().toISOString(),
     raiz,
   };
@@ -354,6 +372,6 @@ function registrarServiceWorker() {
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
   } catch (err) { /* segue o fluxo normal */ }
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=14', { updateViaCache: 'none' }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=17', { updateViaCache: 'none' }).catch(() => {});
   });
 }

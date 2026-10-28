@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Política de Privacidade do aplicativo Fractal (Mactecnology).">
+  <meta name="description" content="Política de Privacidade do aplicativo Fractal (Mactecnology), conforme a LGPD.">
   <meta name="theme-color" content="#0B1020">
   <title>Privacidade — Fractal</title>
   <style>
@@ -13,42 +13,188 @@
     main { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; line-height: 1.6; }
     h1 { font-size: 24px; margin: 0 0 4px; }
     .sub { color: #8B98A8; font-size: 13px; margin-bottom: 24px; }
-    h2 { font-size: 17px; margin: 24px 0 8px; }
+    h2 { font-size: 17px; margin: 28px 0 8px; }
     p, li { font-size: 15px; }
+    ul { padding-left: 20px; }
+    li { margin: 4px 0; }
     a { color: #F58A0C; }
+    code { font-size: 13px; background: #161E33; padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+    .resumo { background: #121A2E; border: 1px solid #243049; border-radius: 12px; padding: 4px 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+    th, td { text-align: left; vertical-align: top; padding: 8px; border-bottom: 1px solid #243049; }
+    th { color: #8B98A8; font-weight: 600; }
     footer { margin-top: 32px; font-size: 13px; color: #8B98A8; }
   </style>
 </head>
 <body>
 <main>
   <h1>Política de Privacidade — Fractal</h1>
-  <p class="sub">Mactecnology • Última atualização: outubro de 2026</p>
+  <p class="sub">Mactecnology • Vigente desde 28 de outubro de 2026</p>
 
-  <h2>Resumo</h2>
-  <p>O Fractal <strong>não coleta, não transmite e não compartilha nenhum dado</strong>.</p>
+  <div class="resumo">
+    <h2>Resumo</h2>
+    <ul>
+      <li>O Fractal funciona <strong>sem conta</strong>: tudo fica só no seu aparelho.</li>
+      <li>Se você <strong>escolher entrar com o Google</strong>, seus projetos e anexos
+        são guardados <strong>no seu próprio Google Drive</strong>, para sincronizar
+        entre aparelhos.</li>
+      <li>O app acessa <strong>apenas os arquivos que ele mesmo cria</strong> no seu
+        Drive. Não vê nem altera seus outros arquivos.</li>
+      <li>O desenvolvedor <strong>não recebe, não vende e não compartilha</strong>
+        nenhum dado seu. Não há anúncios, análise de uso nem rastreamento.</li>
+      <li>Você pode <strong>apagar tudo</strong> a qualquer momento pelo próprio app.</li>
+    </ul>
+  </div>
 
-  <h2>Onde ficam os seus dados</h2>
-  <p>Todo o conteúdo (projetos, círculos, notas, metas e anexos) fica armazenado
-  exclusivamente no próprio aparelho, no banco de dados local do aplicativo.
-  Nada é enviado para servidores.</p>
+  <h2>1. Quem é o responsável</h2>
+  <p>O Fractal é desenvolvido pela <strong>Mactecnology</strong>, controladora dos
+  dados tratados pelo aplicativo nos termos da Lei Geral de Proteção de Dados
+  Pessoais (Lei nº 13.709/2018 — LGPD). Contato do encarregado pelo tratamento
+  de dados: <a href="mailto:contato.mactecnology@gmail.com">contato.mactecnology@gmail.com</a>.</p>
+  <p>Esta política vale para o aplicativo Android e para a versão web do Fractal.</p>
 
-  <h2>O que não existe no app</h2>
+  <h2>2. Quais dados são tratados e para quê</h2>
+  <table>
+    <tr><th>Dado</th><th>Para quê</th><th>Onde fica</th></tr>
+    <tr>
+      <td>Conteúdo que você cria: projetos, itens, notas, metas e anexos
+        (imagens, vídeos, arquivos e links)</td>
+      <td>Funcionamento do app</td>
+      <td>No seu aparelho. Com login, também no seu Google Drive.</td>
+    </tr>
+    <tr>
+      <td>Nome e e-mail da sua conta Google (só se você entrar)</td>
+      <td>Mostrar qual conta está conectada</td>
+      <td>Só no seu aparelho</td>
+    </tr>
+    <tr>
+      <td>Credenciais de acesso emitidas pelo Google (tokens)</td>
+      <td>Permitir que o app acesse os arquivos dele no seu Drive</td>
+      <td>Só no seu aparelho, na área privada do app</td>
+    </tr>
+    <tr>
+      <td>Registro de erro técnico (quando o app falha)</td>
+      <td>Diagnóstico, caso você mesmo decida enviá-lo ao suporte</td>
+      <td>Só no seu aparelho. Nunca é enviado automaticamente.</td>
+    </tr>
+  </table>
+  <p>O Fractal <strong>não</strong> coleta localização, contatos, identificadores de
+  publicidade, histórico de navegação nem dados de uso. Nenhum dado é enviado
+  a servidores do desenvolvedor — o Fractal não tem servidores.</p>
+
+  <h2>3. Acesso ao Google Drive</h2>
+  <p>Ao entrar com o Google, o app pede somente estas permissões:</p>
+  <table>
+    <tr><th>Permissão</th><th>O que permite</th></tr>
+    <tr><td><code>openid</code>, <code>email</code>, <code>profile</code></td>
+      <td>Identificar a conta conectada (nome e e-mail)</td></tr>
+    <tr><td><code>drive.appdata</code></td>
+      <td>Usar uma pasta oculta, exclusiva do Fractal, onde fica o índice dos
+        seus projetos (<code>fractal.json</code>). Você não a vê no Drive e
+        nenhum outro app a acessa.</td></tr>
+    <tr><td><code>drive.file</code></td>
+      <td>Criar e usar só os arquivos que o próprio Fractal cria: a pasta
+        <b>Fractal/Anexos</b> com os seus anexos, visível no seu Drive.</td></tr>
+  </table>
+  <p>O Fractal <strong>não tem acesso</strong> aos demais arquivos e pastas do seu
+  Drive. O espaço usado conta na cota da sua conta Google; o app só lê o total
+  usado para avisar quando o Drive estiver quase cheio.</p>
+  <p>O uso e a transferência, para qualquer outro app, de informações recebidas
+  das APIs do Google seguem a
+  <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Política
+  de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos
+  de Uso Limitado. Os dados obtidos do Google são usados apenas para oferecer a
+  sincronização que você pediu: não são usados para anúncios, não são vendidos,
+  não são lidos por pessoas e não são usados para treinar modelos de
+  inteligência artificial.</p>
+
+  <h2>4. Base legal</h2>
   <ul>
-    <li>Conta de usuário ou login</li>
-    <li>Sincronização ou backup em nuvem</li>
-    <li>Análise de uso, telemetria ou anúncios</li>
-    <li>Acesso de terceiros aos seus dados</li>
+    <li><strong>Sem login:</strong> os dados ficam apenas no aparelho, sob seu
+      controle, para executar o que você pede no app (LGPD, art. 7º, V).</li>
+    <li><strong>Com login:</strong> a sincronização com o Drive se baseia no seu
+      <strong>consentimento</strong> (LGPD, art. 7º, I), dado na tela do Google ao
+      entrar. Você pode revogá-lo quando quiser (seção 7).</li>
   </ul>
 
-  <h2>Permissões do Android</h2>
-  <p>O app usa apenas acesso à internet para carregar seus próprios recursos
-  locais e estado de rede para detectar conectividade. Nenhuma permissão é
-  usada para coletar dados.</p>
+  <h2>5. Compartilhamento e transferência internacional</h2>
+  <p>O desenvolvedor não compartilha seus dados com ninguém. Quando você usa a
+  sincronização, seus projetos e anexos são armazenados pelo <strong>Google</strong>,
+  no Drive da sua conta, conforme a
+  <a href="https://policies.google.com/privacy" rel="noopener">Política de Privacidade do Google</a>.
+  Os servidores do Google podem ficar fora do Brasil; essa transferência ocorre
+  porque você escolheu usar o seu Drive e se apoia no seu consentimento
+  (LGPD, art. 33, VIII) e nas garantias contratuais do próprio Google.</p>
 
-  <h2>Contato</h2>
-  <p>Dúvidas sobre privacidade: <a href="mailto:contato.mactecnology@gmail.com">contato.mactecnology@gmail.com</a>.</p>
+  <h2>6. Segurança</h2>
+  <ul>
+    <li>Toda comunicação com o Google usa conexão criptografada (HTTPS).</li>
+    <li>O login usa o padrão OAuth 2.0 com PKCE, na tela oficial do Google. O app
+      nunca vê a sua senha.</li>
+    <li>As credenciais ficam só no aparelho, na área privada do app, e são
+      revogadas no Google quando você toca em <b>Sair</b>.</li>
+    <li>O backup automático do Android está desativado: seus dados não são
+      copiados para a nuvem nem para outro aparelho sem você pedir.</li>
+    <li>Arquivos importados são verificados antes de entrar no app, e anexos que
+      poderiam executar código não são abertos dentro dele.</li>
+  </ul>
+  <p>Os arquivos no Drive ficam protegidos pela segurança da sua conta Google, mas
+  não usam criptografia própria do Fractal. Recomendamos ativar a verificação em
+  duas etapas na sua conta Google.</p>
 
-  <footer><a href="./">← Voltar ao Fractal</a></footer>
+  <h2>7. Por quanto tempo os dados ficam guardados e como apagar</h2>
+  <p>Os dados ficam guardados até você apagá-los. O Fractal não mantém cópias em
+  nenhum outro lugar.</p>
+  <ul>
+    <li><b>Sair da conta</b> (em Conta): encerra a sessão e revoga o acesso do app
+      ao seu Drive. Os projetos continuam neste aparelho e no seu Drive.</li>
+    <li><b>Apagar meus dados</b> (em Conta): apaga, de forma definitiva, os projetos
+      e anexos do aparelho e, se você estiver conectado, também a pasta
+      <b>Fractal</b> e o índice do app no seu Drive.</li>
+    <li><b>Desinstalar o app</b>: apaga os dados do aparelho. A cópia no Drive
+      continua lá até você usar “Apagar meus dados” ou removê-la pelo Drive.</li>
+    <li>Você também pode remover o acesso do Fractal pela sua conta Google em
+      <a href="https://myaccount.google.com/permissions" rel="noopener">myaccount.google.com/permissions</a>.</li>
+  </ul>
+
+  <h2>8. Seus direitos</h2>
+  <p>Pela LGPD (art. 18) você pode, a qualquer momento: confirmar se há tratamento
+  de dados; acessar e corrigir seus dados; pedir a eliminação; revogar o
+  consentimento; obter informações sobre compartilhamento; e pedir a
+  portabilidade. No Fractal, quase tudo isso está no próprio app — editar,
+  <b>Exportar todos (backup)</b>, <b>Sair</b> e <b>Apagar meus dados</b>. Para
+  qualquer outro pedido, escreva para
+  <a href="mailto:contato.mactecnology@gmail.com">contato.mactecnology@gmail.com</a>.
+  Como o desenvolvedor não guarda seus dados, ele não consegue consultá-los nem
+  apagá-los por você, mas orienta como fazer.</p>
+  <p>Você também pode apresentar reclamação à Autoridade Nacional de Proteção de
+  Dados (<a href="https://www.gov.br/anpd" rel="noopener">ANPD</a>).</p>
+
+  <h2>9. Permissões do Android</h2>
+  <ul>
+    <li><b>Internet</b> e <b>estado da rede</b>: sincronizar com o seu Drive e abrir
+      links que você adicionou.</li>
+    <li><b>Armazenamento</b> (só no Android 7 a 9): salvar o backup exportado na
+      pasta Download. Nas versões mais novas essa permissão não é usada.</li>
+  </ul>
+  <p>Fotos, vídeos e arquivos só são lidos quando você mesmo os escolhe para anexar.</p>
+
+  <h2>10. Crianças e adolescentes</h2>
+  <p>O Fractal não é direcionado a crianças. O login com Google segue as regras de
+  idade da própria conta Google; o uso por crianças deve ter o consentimento e o
+  acompanhamento dos pais ou responsáveis (LGPD, art. 14).</p>
+
+  <h2>11. Mudanças nesta política</h2>
+  <p>Se esta política mudar, a nova versão será publicada nesta página com a data
+  de vigência atualizada. Mudanças que ampliem o uso dos seus dados só valerão
+  com o seu novo consentimento.</p>
+
+  <footer><a href="index.html">← Voltar ao Fractal</a></footer>
 </main>
+<script>
+  /* Botao voltar do Android: o app chama window.__fractalVoltar(); sem ela
+     perguntaria se o usuario quer sair do programa. */
+  window.__fractalVoltar = function () { location.href = 'index.html'; return true; };
+</script>
 </body>
 </html>

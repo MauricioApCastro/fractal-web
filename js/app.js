@@ -7,8 +7,10 @@ document.documentElement.dataset.loadedjs = '1';
 
 const $ = sel => document.querySelector(sel);
 
-/* Versão visível no rodapé (bump a cada release p/ identificar o build). */
-const VERSAO_APP = '29';
+/* Versão mostrada no rodapé. Vem de js/versao.js, gerado no build a partir
+ * do ApplicationDisplayVersion do csproj — assim o app nunca mostra um
+ * número diferente do que a Play Store publica. */
+const VERSAO_APP = typeof VERSAO_RELEASE !== 'undefined' ? VERSAO_RELEASE : '0';
 
 const Estado = {
   projetos: [],
@@ -187,12 +189,26 @@ function entrarItem(item) {
 function voltar() {
   if (Estado.caminho.length > 1) {
     Estado.caminho.pop();
-    Estado.itemPai = null;
+    // Restaura o item pai do nível atual (avô do nível anterior).
+    // Sem isso, após voltar de 2+ níveis, editar centro/meta perde a
+    // referência do pai e a edição do filho parece não atualizar.
+    Estado.itemPai = encontrarItemPaiDoMiolo(mioloAtual());
     resetarZoomFlor();
     renderizarFlor();
     return;
   }
   irParaLista();
+}
+
+// Localiza o item (no miolo imediatamente acima) cujo miolo interno
+// é o miolo fornecido. Devolve null na raiz.
+function encontrarItemPaiDoMiolo(miolo) {
+  if (!miolo || !Estado.atual) return null;
+  if (miolo === Estado.atual.raiz) return null;
+  const indice = Estado.caminho.indexOf(miolo);
+  const mioloAcima = indice > 0 ? Estado.caminho[indice - 1] : Estado.atual.raiz;
+  if (!mioloAcima || !Array.isArray(mioloAcima.itens)) return null;
+  return mioloAcima.itens.find(i => i.miolo === miolo) || null;
 }
 
 /* ============================================================
@@ -341,6 +357,19 @@ function somarDias(dataISO, dias) {
   return dataLocalISO(data);
 }
 
+/* Tipo da meta: 'contagem' conta dias registrados sem pressionar por data;
+ * 'prazo' mantém a cobrança de calendário ("restam X dias", "Atraso").
+ * Metas antigas não têm o campo: quem tem data vira 'prazo', quem não tem
+ * vira 'contagem'. A inferência fica aqui, num ponto só, porque toda leitura
+ * de meta no app passa por esta função. */
+function tipoMetaDe(meta, prazoManual, prazo) {
+  if (meta && (meta.tipo === 'contagem' || meta.tipo === 'prazo')) return meta.tipo;
+  // Sem tipo gravado, infere pelo que existe: data de prazo significa que a
+  // meta foi criada com cobrança de calendário. Qualquer valor fora dos dois
+  // é tratado como ausente, para não cair no lado errado por accidento.
+  return (prazoManual || prazo) ? 'prazo' : 'contagem';
+}
+
 function normalizarMeta(meta) {
   if (!meta) return null;
   const dias = Math.max(1, Math.min(3650, Math.floor(Number(meta.dias) || 30)));
@@ -360,17 +389,31 @@ function normalizarMeta(meta) {
     ? new Date(prazoManualBruto + 'T12:00:00')
     : null;
   const prazoManual = dataPrazoManual && !isNaN(dataPrazoManual.getTime()) ? dataLocalISO(dataPrazoManual) : '';
+  const tipo = tipoMetaDe(meta, prazoManual, prazo);
   return {
+    tipo,
     dias,
     progresso,
     inicio,
-    prazo,
-    prazoManual,
+    // No tipo contagem não há prazo: guardar a data só faria o app
+    // prometer um ritmo que o usuário não declarou.
+    prazo: tipo === 'prazo' ? prazo : '',
+    prazoManual: tipo === 'prazo' ? prazoManual : '',
   };
 }
 
-function criarMeta(dias, inicio) {
-  return normalizarMeta({ dias, progresso: 0, inicio });
+function percentualMeta(meta) {
+  if (!meta || !meta.dias) return 0;
+  return Math.max(0, Math.min(100, Math.round(meta.progresso / meta.dias * 100)));
+}
+
+function criarMeta(dias, inicio, tipo) {
+  // Só aceita os dois tipos conhecidos; qualquer outro vira contagem.
+  const tipoValido = tipo === 'prazo' ? 'prazo' : 'contagem';
+  const base = { dias, progresso: 0, inicio, tipo: tipoValido };
+  // Só o tipo prazo carrega data; no de contagem o inicio fica como registro.
+  if (tipoValido !== 'prazo') { base.prazo = ''; base.prazoManual = ''; }
+  return normalizarMeta(base);
 }
 
 function formatarDataMeta(dataISO) {
@@ -389,6 +432,12 @@ function diasAtePrazo(prazoISO) {
 
 function infoPrazoMeta(meta) {
   if (!meta) return '';
+  // Meta de contagem não cobra calendário: só mostra o que já foi registrado.
+  if (meta.tipo !== 'prazo') {
+    const feitos = meta.progresso;
+    if (feitos === 1) return '1 dia registrado';
+    return feitos + ' dias registrados';
+  }
   const prazoRef = meta.prazoManual || meta.prazo;
   const dias = diasAtePrazo(prazoRef);
   if (dias === null) return 'Prazo: ' + formatarDataMeta(prazoRef);
@@ -542,7 +591,11 @@ function renderizarFlor() {
   csub.className = 'sub-fractal';
   const infoCentro = [];
   if (metaAtiva) {
-    infoCentro.push((metaAtiva.dias - metaAtiva.progresso) + ' dias');
+    /* Percentual primeiro, como padrão de leitura na flor. A fração fica
+     * abaixo e o texto de prazo só aparece quando o tipo cobra data. */
+    const pctMeta = percentualMeta(metaAtiva);
+    infoCentro.push(pctMeta >= 100 ? '100%' : pctMeta + '%');
+    infoCentro.push(metaAtiva.progresso + '/' + metaAtiva.dias + ' dias');
     infoCentro.push(infoPrazoMeta(metaAtiva));
     if (metaAtiva.progresso >= metaAtiva.dias) {
       const dtPai = Estado.itemPai && Estado.itemPai.concluidoEm
@@ -550,6 +603,10 @@ function renderizarFlor() {
       infoCentro.push('concluído' + dtPai);
     }
   } else if (n > 0) {
+    /* Centro do projeto: porcentagem de itens concluídos. A fração sai
+     * daqui — quem tem filhos já mostra "x/y" no próprio item. */
+    const pctCentro = Math.round(nConcluidos / n * 100);
+    infoCentro.push(pctCentro >= 100 ? '100%' : pctCentro + '%');
     infoCentro.push(nConcluidos + '/' + n + (nConcluidos === 1 ? ' concluído' : ' concluídos'));
   }
   if (nAnexos > 0) infoCentro.push(nAnexos + ' anexo(s)');
@@ -650,12 +707,28 @@ function renderizarFlor() {
     const subItens = item.miolo ? item.miolo.itens.length : 0;
     const subAnexos = item.miolo ? item.miolo.anexos.length : 0;
     const textoItens = subItens === 1 ? '1 item' : subItens + ' itens';
+
+    /* Progresso em % vale para meta e para item comum: é o padrão na flor.
+     * Item vazio (sem filhos e sem meta) não tem o que medir, então não
+     * mostra número — só o anel, que também não aparece nesse caso. */
+    const pct = meta ? percentualMeta(meta)
+      : agregado ? Math.round(agregado.progresso / agregado.dias * 100)
+        : (subItens > 0
+          ? Math.round(item.miolo.itens.filter(i => itemConcluido(i)).length / subItens * 100)
+          : null);
+    const pctTexto = pct === null ? '' : pct + '%';
+
+    /* Meta e centro mostram a fração (o anel já dá o %); item comum mostra
+     * quantos filhos estão feitos, o que a porcentagem sozinha não diz. */
     let subTxt = '';
-    if (meta) subTxt = 'restam ' + (meta.dias - meta.progresso) + ' dias';
-    else if (agregado) subTxt = Math.round(agregado.progresso / agregado.dias * 100) + '%';
-    else if (subItens > 0 && subAnexos > 0) subTxt = textoItens + ' • ' + subAnexos;
-    else if (subAnexos > 0) subTxt = subAnexos + ' anexo(s)';
-    else if (subItens > 0) subTxt = textoItens;
+    if (meta) {
+      subTxt = meta.progresso + '/' + meta.dias + ' dias';
+    } else if (subItens > 0) {
+      const feitos = item.miolo.itens.filter(i => itemConcluido(i)).length;
+      subTxt = feitos + '/' + subItens + (subAnexos > 0 ? ' • ' + subAnexos : '');
+    } else if (subAnexos > 0) {
+      subTxt = subAnexos + ' anexo(s)';
+    }
     if (concluido) {
       // Concluído mostra a data; em meta o "x/y dias" sai (anel/selo já indicam).
       const base = meta ? '' : subTxt;
@@ -664,7 +737,8 @@ function renderizarFlor() {
 
     const sub = document.createElement('div');
     sub.className = 'sub-fractal';
-    sub.textContent = subTxt;
+    // A porcentagem vem primeiro: é o padrão de leitura na flor.
+    sub.textContent = pctTexto ? pctTexto + (subTxt ? ' • ' + subTxt : '') : subTxt;
     el.appendChild(sub);
 
     const ordem = document.createElement('span');
@@ -821,11 +895,19 @@ function renderizarControleMeta(meta) {
   const completo = meta.progresso >= meta.dias;
   const dtPai = Estado.itemPai && Estado.itemPai.concluidoEm
     ? formatarDataMeta(Estado.itemPai.concluidoEm) : '';
-  $('#meta-progresso-valor').textContent = completo ? 'concluído' : (meta.dias - meta.progresso) + ' dias';
+
+  // Anel mostra a porcentagem; a fração logo abaixo diz quantos dias já são.
+  $('#meta-progresso-valor').textContent = completo ? '✓' : percentualMeta(meta) + '%';
+  $('#meta-progresso-fracao').textContent = meta.progresso + '/' + meta.dias + ' dias';
   $('#meta-progresso-prazo').textContent = completo && dtPai ? 'em ' + dtPai : infoPrazoMeta(meta);
+
   $('#meta-menos').disabled = meta.progresso <= 0;
-  $('#meta-mais').disabled = meta.progresso >= meta.dias;
-  $('#meta-concluir').disabled = meta.progresso >= meta.dias;
+  $('#meta-mais').disabled = completo;
+  $('#meta-concluir').disabled = completo;
+
+  // O anel do controle acompanha a porcentagem real da meta.
+  const barra = $('#meta-progresso');
+  if (barra) barra.style.setProperty('--progresso-meta', percentualMeta(meta) + '%');
 }
 
 async function registrarProgressoMeta(delta) {
@@ -864,6 +946,9 @@ function editarMiolo() {
   editar('Editar centro', miolo.nome, miolo.anotacoes, (nome, notas) => {
     miolo.nome = nome;
     miolo.anotacoes = notas;
+    // O centro interno é o espelho do item pai: sem isso, editar o
+    // círculo filho não atualiza o nome na tela de fora (e vice-versa).
+    if (Estado.itemPai && Estado.itemPai.miolo === miolo) Estado.itemPai.nome = nome;
     // O centro da raiz tambem da o nome ao projeto na lista de projetos.
     if (Estado.atual && miolo === Estado.atual.raiz) Estado.atual.nome = nome;
     guardar();
@@ -871,27 +956,57 @@ function editarMiolo() {
   });
 }
 
-function abrirEditorMeta(titulo, nome, dias, inicio, okTexto, prazoManual) {
+function abrirEditorMeta(titulo, nome, dias, inicio, okTexto, prazoManual, tipoAtual) {
   const hoje = dataLocalISO();
   const prazo = somarDias(inicio || hoje, dias || 30);
+  const tipo = tipoAtual === 'prazo' ? 'prazo' : 'contagem';
   const resultado = abrirModal(
     titulo,
     '<label for="meta-nome">Nome da meta</label>' +
     '<input class="campo" id="meta-nome" type="text" value="' + escapeHtml(nome || '') + '">' +
+
+    '<label>Como contar</label>' +
+    '<div class="meta-tipo-escolha">' +
+    '<label class="meta-tipo-opcao">' +
+    '<input type="radio" name="meta-tipo" value="contagem"' + (tipo === 'contagem' ? ' checked' : '') + '>' +
+    '<span class="meta-tipo-texto"><b>Por contagem</b>' +
+    '<small>Você registra um dia por vez. Não cobra data.</small></span>' +
+    '</label>' +
+    '<label class="meta-tipo-opcao">' +
+    '<input type="radio" name="meta-tipo" value="prazo"' + (tipo === 'prazo' ? ' checked' : '') + '>' +
+    '<span class="meta-tipo-texto"><b>Por prazo</b>' +
+    '<small>Mostra quanto falta e avisa do atraso.</small></span>' +
+    '</label>' +
+    '</div>' +
+
     '<label for="meta-dias">Duração estimada (dias)</label>' +
     '<input class="campo" id="meta-dias" type="number" min="1" max="3650" step="1" value="' + escapeHtml(dias || 30) + '">' +
     '<label for="meta-inicio">Data de início</label>' +
     '<input class="campo" id="meta-inicio" type="date" value="' + escapeHtml(inicio || hoje) + '">' +
+    '<div id="meta-campos-prazo">' +
     '<label for="meta-prazo-manual">Prazo manual (opcional)</label>' +
     '<input class="campo" id="meta-prazo-manual" type="date" value="' + escapeHtml(prazoManual || '') + '">' +
-    '<p id="meta-previsao" style="margin:14px 0 0;color:#8B98A8;font-size:12px">Prazo previsto: ' + escapeHtml(formatarDataMeta(prazo)) + '</p>',
+    '<p id="meta-previsao" style="margin:14px 0 0;color:#8B98A8;font-size:12px">Prazo previsto: ' + escapeHtml(formatarDataMeta(prazo)) + '</p>' +
+    '</div>',
     okTexto
   );
+
+  // No tipo contagem os campos de prazo somem: o app deixa de prometer um
+  // ritmo que o usuário não declarou.
+  const aplicarTipo = () => {
+    const escolhido = document.querySelector('input[name="meta-tipo"]:checked');
+    const bloco = $('#meta-campos-prazo');
+    if (bloco) bloco.hidden = escolhido ? escolhido.value !== 'prazo' : true;
+  };
+  document.querySelectorAll('input[name="meta-tipo"]').forEach(r =>
+    r.addEventListener('change', aplicarTipo));
+  aplicarTipo();
 
   const atualizarPrevisao = () => {
     const diasInformados = Math.floor(Number($('#meta-dias').value));
     const inicioInformado = $('#meta-inicio').value || hoje;
     const previsao = $('#meta-previsao');
+    if (!previsao) return;
     if (!Number.isFinite(diasInformados) || diasInformados < 1) {
       previsao.textContent = 'Informe uma duração válida.';
       return;
@@ -899,12 +1014,12 @@ function abrirEditorMeta(titulo, nome, dias, inicio, okTexto, prazoManual) {
     previsao.textContent = 'Prazo previsto: ' + formatarDataMeta(somarDias(inicioInformado, diasInformados));
   };
   const atualizarDiasPrazo = () => {
-    const prazoManual = $('#meta-prazo-manual').value;
+    const manual = $('#meta-prazo-manual').value;
     const inicioInformado = $('#meta-inicio').value || hoje;
-    if (!prazoManual || !/^\d{4}-\d{2}-\d{2}$/.test(prazoManual)) return;
+    if (!manual || !/^\d{4}-\d{2}-\d{2}$/.test(manual)) return;
     const inicio = new Date(inicioInformado + 'T12:00:00');
-    const prazo = new Date(prazoManual + 'T12:00:00');
-    const diff = Math.round((prazo - inicio) / 86400000);
+    const fim = new Date(manual + 'T12:00:00');
+    const diff = Math.round((fim - inicio) / 86400000);
     if (diff >= 1) {
       $('#meta-dias').value = diff;
       atualizarPrevisao();
@@ -916,11 +1031,15 @@ function abrirEditorMeta(titulo, nome, dias, inicio, okTexto, prazoManual) {
 
   return resultado.then(res => {
     if (res !== 'ok') return null;
+    const escolhido = document.querySelector('input[name="meta-tipo"]:checked');
+    const tipoEscolhido = escolhido ? escolhido.value : 'contagem';
     return {
       nome: ($('#meta-nome').value || '').trim(),
       dias: Math.floor(Number($('#meta-dias').value)),
       inicio: $('#meta-inicio').value || hoje,
-      prazoManual: $('#meta-prazo-manual').value || '',
+      // Prazo só existe no tipo prazo; no de contagem vem vazio de propósito.
+      prazoManual: tipoEscolhido === 'prazo' ? ($('#meta-prazo-manual').value || '') : '',
+      tipo: tipoEscolhido,
     };
   });
 }
@@ -941,7 +1060,7 @@ async function novoConfirmacaoMeta(dados) {
   }
   const miolo = mioloAtual();
   const item = novoItem(nome, miolo.itens.length);
-  item.meta = criarMeta(dias, dados.inicio);
+  item.meta = criarMeta(dias, dados.inicio, dados.tipo);
   item.meta.prazoManual = dados.prazoManual || '';
   miolo.itens.push(item);
   await guardar();
@@ -952,7 +1071,7 @@ async function novoConfirmacaoMeta(dados) {
 async function editarMetaItem(item) {
   const meta = normalizarMeta(item.meta);
   if (!meta) return;
-  const dados = await abrirEditorMeta('Editar meta', item.nome, meta.dias, meta.inicio, 'Salvar', meta.prazoManual);
+  const dados = await abrirEditorMeta('Editar meta', item.nome, meta.dias, meta.inicio, 'Salvar', meta.prazoManual, meta.tipo);
   if (!dados) return;
   const nome = String(dados.nome || '').trim();
   const dias = Math.floor(Number(dados.dias));
@@ -960,10 +1079,13 @@ async function editarMetaItem(item) {
     toast('Informe um nome e uma duração válida.');
     return;
   }
+  meta.tipo = dados.tipo === 'prazo' ? 'prazo' : 'contagem';
   meta.dias = dias;
   meta.progresso = Math.min(meta.progresso, dias);
   meta.inicio = dados.inicio;
-  meta.prazo = somarDias(meta.inicio, dias);
+  // Trocar de contagem para prazo (ou o inverso) zera o prazo herdado, para
+  // o app não aplicar uma cobrança de calendário à meta que não pediu.
+  meta.prazo = meta.tipo === 'prazo' ? somarDias(meta.inicio, dias) : '';
   meta.prazoManual = dados.prazoManual || '';
   item.nome = nome;
   item.miolo.nome = nome;
@@ -975,7 +1097,7 @@ async function editarMetaItem(item) {
 }
 
 async function transformarEmMeta(item) {
-  const dados = await abrirEditorMeta('Transformar em meta', item.nome, 30, dataLocalISO(), 'Criar meta', '');
+  const dados = await abrirEditorMeta('Transformar em meta', item.nome, 30, dataLocalISO(), 'Criar meta', '', 'contagem');
   if (!dados) return;
   const nome = String(dados.nome || '').trim();
   const dias = Math.floor(Number(dados.dias));
@@ -985,7 +1107,7 @@ async function transformarEmMeta(item) {
   }
   item.nome = nome;
   item.miolo.nome = nome;
-  item.meta = criarMeta(dias, dados.inicio);
+  item.meta = criarMeta(dias, dados.inicio, dados.tipo);
   item.meta.prazoManual = dados.prazoManual || '';
   marcarConcluido(item, false);
   await guardar();
@@ -1244,7 +1366,11 @@ async function abrirAnexo(anexo) {
       : 'Arquivo não encontrado.');
     return;
   }
-  const url = URL.createObjectURL(blob);
+  // No navegador, um blob HTML/SVG aberto em nova aba roda script na origem
+  // do app (acesso a todos os projetos). Esses tipos viram download. No
+  // Android a ponte entrega o arquivo a um visualizador externo, sem risco.
+  const arriscado = !window.fractalBridge && /html|xml|svg|script/i.test(blob.type || '');
+  const url = URL.createObjectURL(arriscado ? new Blob([blob], { type: 'application/octet-stream' }) : blob);
   window.open(url, '_blank', 'noopener');
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
@@ -1366,7 +1492,16 @@ function editar(titulo, nome, notas, aoGuardar) {
 }
 
 function confirmar(titulo, msg, aoSim) {
-  abrirModal(titulo, '<p style="margin:0;color:#C9D4E3">' + msg + '</p>', 'Sim')
+  const corpo = document.createElement('p');
+  corpo.style.margin = '0';
+  corpo.style.color = '#C9D4E3';
+  corpo.textContent = msg;
+  $('#modal-titulo').textContent = titulo;
+  $('#modal-corpo').replaceChildren(corpo);
+  $('#modal-ok').textContent = 'Sim';
+  $('#modal-ok').className = 'btn btn-primario';
+  $('#modal-overlay').hidden = false;
+  new Promise(resolve => { modalResolve = resolve; })
     .then(res => { if (res === 'ok') aoSim(); });
 }
 
@@ -1491,6 +1626,35 @@ function wire() {
   const ponteiros = new Map();
   let pinca = null;
 
+  /* O WebView dispara varios pointermove por quadro (um por dedo na pinca),
+     e cada aplicarEscala() forca dois recalculos de layout. Os movimentos
+     se acumulam aqui e sao aplicados uma vez por quadro: o gesto fica
+     fluido sem mudar o ponto focal (os fatores de zoom se multiplicam). */
+  let gestoPendente = null;
+  let quadroGesto = 0;
+
+  function aplicarGestoPendente() {
+    quadroGesto = 0;
+    const g = gestoPendente;
+    gestoPendente = null;
+    if (!g) return;
+    if (g.fator !== 1) alterarZoom(g.fator, g.centro);
+    else if (g.pan) posicionarFlor();
+  }
+
+  function agendarGesto(fator, centro) {
+    if (!gestoPendente) gestoPendente = { fator: 1, centro: null, pan: false };
+    if (fator) { gestoPendente.fator *= fator; gestoPendente.centro = centro; }
+    else gestoPendente.pan = true;
+    if (!quadroGesto) quadroGesto = requestAnimationFrame(aplicarGestoPendente);
+  }
+
+  function concluirGestoPendente() {
+    if (!quadroGesto) return;
+    cancelAnimationFrame(quadroGesto);
+    aplicarGestoPendente();
+  }
+
   function dadosPinca() {
     const lista = Array.from(ponteiros.values());
     if (lista.length < 2) return null;
@@ -1522,6 +1686,7 @@ function wire() {
 
   canvasFlor.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    concluirGestoPendente();
     ponteiros.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
 
     // Pinça: vale mesmo sem transbordo, porque serve para aproximar.
@@ -1548,7 +1713,7 @@ function wire() {
       if (pinca && atual && pinca.distancia > 0) {
         const fator = atual.distancia / pinca.distancia;
         if (Number.isFinite(fator) && fator > 0) {
-          alterarZoom(fator, atual.centro);
+          agendarGesto(fator, atual.centro);
           Estado.arrastouFlor = true;
         }
       }
@@ -1571,11 +1736,12 @@ function wire() {
 
     Estado.panX = arrasto.panX + dx;
     Estado.panY = arrasto.panY + dy;
-    posicionarFlor();
+    agendarGesto();
     e.preventDefault();
   });
 
   function finalizarArrasto(e) {
+    concluirGestoPendente();
     if (e && e.pointerId !== undefined) ponteiros.delete(e.pointerId);
     else ponteiros.clear();
 

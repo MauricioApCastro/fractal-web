@@ -90,6 +90,20 @@ const Conta = (() => {
 
     const logado = !!s.logado;
 
+    /* Diagnóstico: o que o Google liberou de fato (lido do tokeninfo). */
+    const escEl = $id('conta-escopos');
+    if (escEl) {
+      const concedidos = (GoogleAuth.escoposConcedidos() || [])
+        .map(x => String(x).split('/auth/').pop());
+      escEl.textContent = concedidos.length ? 'Permissões: ' + concedidos.join(', ') : '';
+    }
+
+    /* Botão de reautorização: quando falta o Drive (ou o erro indica permissão). */
+    const precisaDrive = GoogleAuth.faltandoDrive() ||
+      (s.situacao === 'erro' && /drive|permiss/i.test(s.mensagem || ''));
+    const btnDrive = $id('btn-autorizar-drive');
+    if (btnDrive) btnDrive.hidden = !(logado && precisaDrive);
+
     const blocoDeslogado = $id('conta-deslogado');
     const blocoLogado = $id('conta-logado');
     if (blocoDeslogado) blocoDeslogado.hidden = logado;
@@ -109,9 +123,9 @@ const Conta = (() => {
             aviso(err.message || 'Falha no login do Google.', true);
           });
         } catch (err) { /* ignora */ }
-      } else {
-        alvo.innerHTML = '<p class="conta-aviso">Login na web ainda sem credenciais. ' +
-          'Preencha <code>js/config.js</code> (veja SYNC-SETUP.md).</p>';
+      } else if (!GoogleAuth.temPonteNativa()) {
+        // No Android o login e pelo botao nativo; este aviso e so da web.
+        alvo.innerHTML = '<p class="conta-aviso">O login com Google não está disponível nesta versão do site.</p>';
       }
     }
 
@@ -156,20 +170,48 @@ const Conta = (() => {
 
   async function sincronizarAgora() {
     await Sync.sincronizar(true);
+    /* Se o erro foi de escopo, atualiza o diagnóstico e mostra o botão. */
+    await GoogleAuth.verificarEscopos().catch(() => {});
     render();
     const s = Sync.status();
     if (s.situacao === 'erro') aviso(s.mensagem || 'Falha ao sincronizar.', true);
   }
 
+  /* Reabre a tela de permissões do Google para conceder o Drive.
+     Usado quando o token voltou sem os escopos do Drive. */
+  async function autorizarDrive() {
+    try {
+      aviso('Abrindo o Google. Marque TODAS as permissões (Drive) e toque em Continuar.');
+      await GoogleAuth.entrarNativo(true);
+      await GoogleAuth.verificarEscopos().catch(() => {});
+      await Sync.sincronizar(true);
+      render();
+      const s = Sync.status();
+      const falhou = s.situacao === 'erro';
+      aviso(falhou ? (s.mensagem || 'Ainda falta permissão para o Drive.') : 'Drive autorizado.',
+        falhou);
+    } catch (err) {
+      aviso(err.message || 'Falha ao autorizar o Drive.', true);
+      render();
+    }
+  }
+
   /* Exclusão total dos dados (LGPD, art. 18): apaga o que está no
      Drive (índice + pasta Fractal) e o que está neste aparelho. */
   async function apagarMeusDados() {
-    const ok = window.confirm(
-      'Isto apaga TODOS os seus dados do Fractal:\n\n' +
-      '• os projetos e anexos deste aparelho;\n' +
-      '• a pasta "Fractal" e o índice do app no seu Google Drive;\n' +
-      '• a sua sessão do Google neste aparelho.\n\n' +
-      'Não dá para desfazer. Quer continuar?'
+    /* Sem login nao ha como alcancar o Drive: avisa antes, para o titular
+       nao achar que a copia na nuvem tambem foi eliminada. */
+    const ok = window.confirm(GoogleAuth.logado()
+      ? 'Isto apaga TODOS os seus dados do Fractal:\n\n' +
+        '• os projetos e anexos deste aparelho;\n' +
+        '• a pasta "Fractal" e o índice do app no seu Google Drive;\n' +
+        '• a sua sessão do Google neste aparelho.\n\n' +
+        'Não dá para desfazer. Quer continuar?'
+      : 'Você não está conectado ao Google, então só os projetos e anexos ' +
+        'DESTE APARELHO serão apagados.\n\n' +
+        'Se você já sincronizou com o Drive, entre com o Google antes para ' +
+        'apagar também a cópia na nuvem.\n\n' +
+        'Não dá para desfazer. Quer continuar?'
     );
     if (!ok) return;
 
@@ -202,6 +244,9 @@ const Conta = (() => {
 
     const btnSinc = $id('btn-sincronizar');
     if (btnSinc) btnSinc.addEventListener('click', sincronizarAgora);
+
+    const btnDrive = $id('btn-autorizar-drive');
+    if (btnDrive) btnDrive.addEventListener('click', autorizarDrive);
 
     const btnApagar = $id('btn-apagar-dados');
     if (btnApagar) btnApagar.addEventListener('click', apagarMeusDados);

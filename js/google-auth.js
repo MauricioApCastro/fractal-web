@@ -130,6 +130,7 @@ const GoogleAuth = (() => {
           erro: '',
         };
         notificar();
+        verificarEscopos().catch(() => {});
         return true;
       }
     } catch (e) { /* sem tokens: segue offline */ }
@@ -213,9 +214,51 @@ const GoogleAuth = (() => {
     });
   }
 
+  /* ---------- escopos realmente concedidos ---------- */
+
+  /* O Google pode devolver um token SEM os escopos do Drive (acontece quando
+     as caixas de permissao sao desmarcadas na tela de consentimento). O
+     tokeninfo diz exatamente o que foi concedido - e a unica forma de saber,
+     porque o token em si e opaco. */
+  let escoposConcedidos = [];
+
+  function escoposDrivePedidos() {
+    return (config().scopes || []).filter(s => /\/auth\/drive\./.test(s));
+  }
+
+  async function verificarEscopos() {
+    escoposConcedidos = [];
+    if (!tokens || !tokens.access_token) return null;
+    let j = null;
+    try {
+      const r = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' +
+        encodeURIComponent(tokens.access_token));
+      if (r.ok) j = await r.json();
+    } catch (e) { /* sem rede: nao da para saber */ }
+    if (!j || typeof j.scope !== 'string') return null;   // nao mexe no estado
+
+    escoposConcedidos = j.scope.split(/\s+/).filter(Boolean);
+    const faltando = escoposDrivePedidos().filter(s => !escoposConcedidos.includes(s));
+    if (faltando.length) {
+      estado = Object.assign({}, estado, {
+        faltandoDrive: true,
+        escopos: escoposConcedidos,
+        erro: 'O Google não liberou o acesso ao Drive. Toque em "Autorizar o Drive" e marque TODAS as permissões.',
+      });
+    } else {
+      estado = Object.assign({}, estado, {
+        faltandoDrive: false,
+        escopos: escoposConcedidos,
+        erro: /não liberou o acesso ao Drive/.test(estado.erro || '') ? '' : estado.erro,
+      });
+    }
+    notificar();
+    return escoposConcedidos;
+  }
+
   /* ---------- caminho nativo (Android) ---------- */
 
-  async function entrarNativo() {
+  async function entrarNativo(forcarConsentimento) {
     if (!temPonteNativa()) throw new Error('O login nativo não está disponível neste ambiente.');
     const nativo = configNativa();
     if (nativo && nativo.configurado === false) {
@@ -226,8 +269,10 @@ const GoogleAuth = (() => {
     const state = aleatorio(16);
     await Storage.guardarConfig('google_pkce', { verifier, state, em: Date.now() }).catch(() => {});
 
-    /* Sem refresh token ainda: pede consentimento para o Google emitir um. */
-    const forcar = !(tokens && tokens.refresh_token);
+    /* Sem refresh token ainda: pede consentimento para o Google emitir um.
+       Com forcarConsentimento = true a tela de permissoes volta a aparecer
+       (usado quando o Google nao liberou o Drive na primeira vez). */
+    const forcar = !!forcarConsentimento || !(tokens && tokens.refresh_token);
 
     return new Promise((resolve, reject) => {
       resolverPendente = { resolve, reject };
@@ -248,8 +293,11 @@ const GoogleAuth = (() => {
       if (!payload) return;
       if (payload.erro) throw new Error(String(payload.erro));
 
+      /* O state tem de bater com o do pedido feito por este aparelho: sem
+         isso, outro app poderia injetar um login que o usuario nao pediu. */
       const guardado = await Storage.pegarConfig('google_pkce').catch(() => null);
-      if (guardado && payload.state && guardado.state !== payload.state) {
+      await Storage.apagarConfig('google_pkce').catch(() => {});
+      if (!guardado || !payload.state || guardado.state !== payload.state) {
         throw new Error('A resposta do Google não confere. Tente de novo.');
       }
 
@@ -262,6 +310,8 @@ const GoogleAuth = (() => {
         nome: payload.nome || '',
       };
       await guardarTokens(token);
+      /* Confere no Google se o Drive veio mesmo liberado. */
+      try { await verificarEscopos(); } catch (e) { /* diagnostico opcional */ }
       if (pendente) pendente.resolve(estado);
     } catch (err) {
       estado = Object.assign({}, estado, { erro: String(err.message || err) });
@@ -279,7 +329,18 @@ const GoogleAuth = (() => {
 
   /* ---------- renovar o token ---------- */
 
-  async function renovarComRefresh() {
+  /* Sync e anexos pedem token ao mesmo tempo; com o token vencido, cada um
+     faria sua propria renovacao. Todos esperam a mesma. */
+  let renovacaoEmCurso = null;
+
+  function renovarComRefresh() {
+    if (!renovacaoEmCurso) {
+      renovacaoEmCurso = renovarAgora().finally(() => { renovacaoEmCurso = null; });
+    }
+    return renovacaoEmCurso;
+  }
+
+  async function renovarAgora() {
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -323,7 +384,22 @@ const GoogleAuth = (() => {
 
   /* ---------- sair ---------- */
 
+  /* Revoga no Google: sem isso o refresh token continuaria valido por
+     meses depois de sair, mesmo apagado do aparelho. */
+  async function revogar(t) {
+    const token = t && (t.refresh_token || t.access_token);
+    if (!token) return;
+    try {
+      await fetch('https://oauth2.googleapis.com/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token }).toString(),
+      });
+    } catch (e) { /* sem rede: o token some do aparelho mesmo assim */ }
+  }
+
   async function sair() {
+    await revogar(tokens);
     try {
       if (window.google && window.google.accounts && window.google.accounts.id) {
         window.google.accounts.id.disableAutoSelect();
@@ -345,6 +421,9 @@ const GoogleAuth = (() => {
     entrarWeb,
     entrarNativo,
     accessToken,
+    verificarEscopos,
+    escoposConcedidos: () => escoposConcedidos.slice(),
+    faltandoDrive: () => !!estado.faltandoDrive,
     sair,
     onChange: (fn) => { ouvintes.push(fn); return () => { ouvintes = ouvintes.filter(f => f !== fn); }; },
     notificar,

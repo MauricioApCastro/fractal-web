@@ -218,6 +218,13 @@ button {
   opacity: 0.7;
 }
 
+/* No celular o rodape quebra em duas linhas e o separador sobrava no comeco
+   da segunda. Ali o espaco entre os itens ja separa. */
+@media (max-width: 600px) {
+  .sep-rodape { display: none; }
+  .rodape-lista { column-gap: 18px; row-gap: 4px; }
+}
+
 /* ============ FLOR ============ */
 .flor-canvas {
   flex: 1;
@@ -415,6 +422,7 @@ button {
   gap: 4px;
   width: min(430px, calc(100vw - 24px));
   padding: 6px;
+  margin-bottom: 54px;
   border: 1px solid var(--borda);
   border-radius: 18px;
   background: rgba(21, 27, 46, 0.96);
@@ -434,26 +442,94 @@ button {
 }
 .meta-btn:hover { background: #2A3655; }
 .meta-btn:disabled { opacity: 0.35; cursor: default; }
+/* O botão central tem três linhas (%, fração, prazo), então a barra é
+ * mais alta que os demais e o texto encolhe para caber. */
 .meta-progresso {
+  position: relative;
   min-width: 0;
   flex: 1;
-  height: 42px;
-  padding: 4px 8px;
+  height: 58px;
+  padding: 5px 8px;
   border-radius: 12px;
   background: transparent;
   color: var(--texto);
   text-align: center;
+  overflow: hidden;
 }
 .meta-progresso:hover { background: #202A46; }
 .meta-progresso span,
 .meta-progresso small {
+  position: relative;
+  z-index: 1;
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.meta-progresso span { font-size: 13px; font-weight: 700; }
-.meta-progresso small { margin-top: 2px; color: var(--texto-fraco); font-size: 10px; }
+.meta-progresso span { font-size: 15px; font-weight: 700; }
+.meta-progresso small { margin-top: 1px; color: var(--texto-fraco); font-size: 10px; }
+
+/* Anel de progresso atrás do texto, na proporção real da meta. */
+.meta-progresso::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(230, 183, 74, 0.28) 0,
+    rgba(230, 183, 74, 0.28) var(--progresso-meta, 0%),
+    transparent var(--progresso-meta, 0%),
+    transparent 100%
+  );
+  border-radius: 12px;
+  transition: background 0.2s ease;
+}
+
+/* Desfazer fica fora do eixo numérico: era "−1", que se confundia com
+ * contagem regressiva. Agora desfaz o último dia registrado. */
+.meta-btn-desfazer {
+  background: transparent;
+  color: var(--texto-fraco);
+  font-size: 19px;
+}
+.meta-btn-desfazer:hover:not(:disabled) { background: #2A3655; color: var(--texto); }
+/* Escolha do tipo de meta: duas opções empilhadas, cada uma explicando
+ * o próprio comportamento em uma linha. */
+.meta-tipo-escolha {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.meta-tipo-opcao {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  background: var(--fundo);
+  cursor: pointer;
+}
+.meta-tipo-opcao:has(input:checked) {
+  border-color: var(--dourado-b);
+  background: rgba(230, 183, 74, 0.08);
+}
+.meta-tipo-opcao input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: var(--dourado-b);
+}
+.meta-tipo-texto { min-width: 0; }
+.meta-tipo-texto b { display: block; font-size: 13px; color: var(--texto); }
+.meta-tipo-texto small { display: block; margin-top: 2px; font-size: 11px; color: var(--texto-fraco); }
+
+/* A fração (7/30 dias) é secundária em relação ao %: mais apagada. */
+#meta-progresso-fracao { opacity: 0.75; }
+
 .meta-concluir { background: #E6EDF3; color: #0B1020; }
 .meta-concluir:hover { background: #FFFFFF; }
 
@@ -976,6 +1052,12 @@ textarea.campo { min-height: 110px; resize: vertical; }
   justify-content: flex-start;
   min-height: 44px;
 }
+
+/* No Android o login e pelo botao nativo e este bloco fica vazio. */
+.conta-google:empty { display: none; }
+
+.conta-permissoes { font-size: 13px; }
+.conta-permissoes a { color: var(--dourado-b); }
 
 .conta-aviso {
   margin: 0;
