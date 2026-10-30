@@ -25,7 +25,8 @@ const Conta = (() => {
   function rotuloSituacao(s) {
     switch (s.situacao) {
       case 'sincronizado': return 'Sincronizado';
-      case 'pendente': return 'Sincronizando...';
+      case 'sincronizando': return 'Sincronizando...';
+      case 'pendente': return 'Alterações pendentes';
       case 'erro': return 'Erro na sincronização';
       default: return 'Só neste aparelho';
     }
@@ -110,7 +111,12 @@ const Conta = (() => {
     if (blocoLogado) blocoLogado.hidden = !logado;
 
     const btnSinc = $id('btn-sincronizar');
-    if (btnSinc) btnSinc.disabled = !logado || s.situacao === 'pendente';
+    if (btnSinc) {
+      const emAndamento = s.situacao === 'sincronizando';
+      btnSinc.disabled = !logado || emAndamento;
+      btnSinc.classList.toggle('carregando', emAndamento);
+      btnSinc.textContent = emAndamento ? 'Sincronizando...' : 'Sincronizar agora';
+    }
 
     /* Botão oficial do Google (apenas na web). */
     const alvo = $id('conta-google');
@@ -135,7 +141,10 @@ const Conta = (() => {
     /* Resumo no rodapé da lista. */
     const resumo = $id('conta-resumo');
     if (resumo) {
-      resumo.textContent = logado ? 'Conta: ' + (s.email || 'conectada') : 'Conta: local';
+      resumo.textContent = logado
+        ? (s.situacao === 'sincronizando' ? 'Sincronizando...' : 'Conta: ' + (s.email || 'conectada'))
+        : 'Conta: local';
+      resumo.classList.toggle('carregando', s.situacao === 'sincronizando');
     }
   }
 

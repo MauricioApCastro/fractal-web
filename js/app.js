@@ -44,6 +44,8 @@ async function guardar() {
   sincronizarProjetoNaLista();
   // Se houver conta do Google conectada, agenda o envio para o Drive.
   if (typeof Sync !== 'undefined' && Sync && Sync.marcarSujo) Sync.marcarSujo();
+  // Mantem a contagem de metas do lembrete diario em dia (so no Android).
+  if (typeof Lembrete !== 'undefined' && Lembrete) Lembrete.informar();
 }
 
 /* O projeto em edicao e outra instancia da que esta no cache da lista.
@@ -217,6 +219,7 @@ function encontrarItemPaiDoMiolo(miolo) {
  * Devolve false na lista de projetos, para o app poder fechar.
  * ============================================================ */
 function tratarVoltar() {
+  if (typeof Tutorial !== 'undefined' && Tutorial.aberto()) { Tutorial.fechar(); return true; }
   if (!$('#sheet-overlay').hidden) { fecharSheet(); return true; }
   if (!$('#modal-overlay').hidden) { resolverModal(null); return true; }
   if (Estado.tela === 'conta') {
@@ -918,6 +921,7 @@ async function registrarProgressoMeta(delta) {
   if (novoProgresso === meta.progresso) return;
   meta.progresso = novoProgresso;
   item.meta = meta;
+  if (delta > 0 && typeof Lembrete !== 'undefined' && Lembrete) await Lembrete.registrouHoje();
   const concluiu = novoProgresso >= meta.dias;
   marcarConcluido(item, concluiu);
   await guardar();
@@ -931,6 +935,7 @@ async function concluirMetaAtual() {
   const meta = normalizarMeta(item.meta);
   meta.progresso = meta.dias;
   item.meta = meta;
+  if (typeof Lembrete !== 'undefined' && Lembrete) await Lembrete.registrouHoje();
   marcarConcluido(item, true);
   await guardar();
   renderizarFlor();
@@ -1384,13 +1389,22 @@ function fluxoAdicionarAnexo(tipo) {
     return;
   }
   if (tipo === 'link') { pedirLink('Link', 'link'); return; }
-  if (tipo === 'imagem') adicionarAnexoArquivo('imagem', ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']);
+  if (tipo === 'imagem') {
+    const extensoes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+    mostrarSheet('Imagem', [
+      { texto: 'Tirar foto', acao: () => adicionarAnexoArquivo('imagem', extensoes, true) },
+      { texto: 'Escolher da galeria', acao: () => adicionarAnexoArquivo('imagem', extensoes) },
+    ]);
+  }
   if (tipo === 'arquivo') adicionarAnexoArquivo('arquivo', null);
 }
 
-function adicionarAnexoArquivo(tipo, extPermitidas) {
+function adicionarAnexoArquivo(tipo, extPermitidas, tirarFoto) {
   const input = $('#input-arquivo');
   input.accept = extPermitidas ? extPermitidas.map(e => '.' + e).join(',') : '';
+  // Com "capture" o navegador (e o WebView do app) abre a camera direto.
+  if (tirarFoto) input.setAttribute('capture', 'environment');
+  else input.removeAttribute('capture');
   input.value = '';
   input.onchange = async () => {
     const file = input.files && input.files[0];
@@ -1817,15 +1831,25 @@ function wire() {
     if (tratarVoltar()) e.preventDefault();
   });
 
+  /* Ao girar a tela a Flor volta para o centro, mantendo o zoom. O teclado
+     virtual tambem redimensiona, mas ai preserva o ponto em foco. A janela de
+     tempo cobre os varios eventos de resize de um mesmo giro. */
+  let paisagem = window.innerWidth > window.innerHeight;
+  let recentrarAte = 0;
+  function reajustarFlor() {
+    const agora = window.innerWidth > window.innerHeight;
+    if (agora !== paisagem) {
+      paisagem = agora;
+      recentrarAte = Date.now() + 700;
+    }
+    if (Estado.tela === 'flor') aplicarEscala(Date.now() > recentrarAte);
+  }
+
   if ('ResizeObserver' in window) {
-    Estado.observadorTamanho = new ResizeObserver(() => {
-      if (Estado.tela === 'flor') aplicarEscala(true);
-    });
+    Estado.observadorTamanho = new ResizeObserver(reajustarFlor);
     Estado.observadorTamanho.observe($('#flor-canvas'));
   }
-  window.addEventListener('resize', () => {
-    if (Estado.tela === 'flor') aplicarEscala(true);
-  });
+  window.addEventListener('resize', reajustarFlor);
 
   /* Teclado virtual 1: espelha a altura no --kb enquanto ele anima. */
   (function () {

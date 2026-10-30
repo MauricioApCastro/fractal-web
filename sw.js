@@ -12,22 +12,24 @@
  *    em segundo plano.
  * ============================================================ */
 
-const CACHE = 'fractal-v17';
+const CACHE = 'fractal-v18';
 
 const CORE = [
   './',
-  './?v=17',
+  './?v=18',
   './index.html',
-  './manifest.json?v=17',
-  './css/styles.css?v=17',
-  './js/versao.js?v=17',
-  './js/storage.js?v=17',
-  './js/app.js?v=17',
-  './js/config.js?v=17',
-  './js/google-auth.js?v=17',
-  './js/drive-sync.js?v=17',
-  './js/sync.js?v=17',
-  './js/conta.js?v=17',
+  './manifest.json?v=18',
+  './css/styles.css?v=18',
+  './js/versao.js?v=18',
+  './js/storage.js?v=18',
+  './js/app.js?v=18',
+  './js/config.js?v=18',
+  './js/google-auth.js?v=18',
+  './js/drive-sync.js?v=18',
+  './js/sync.js?v=18',
+  './js/conta.js?v=18',
+  './js/tutorial.js?v=18',
+  './js/lembrete.js?v=18',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',

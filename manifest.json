@@ -3,7 +3,7 @@
   "short_name": "Fractal",
   "description": "Organize projetos, tarefas, notas e ideias em um formato visual de fractais, com anexos.",
   "lang": "pt-BR",
-  "start_url": "./?v=17",
+  "start_url": "./?v=18",
   "scope": ".",
   "display": "standalone",
   "orientation": "any",

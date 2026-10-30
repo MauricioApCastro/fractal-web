@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Fractal">
-  <link rel="manifest" href="manifest.json?v=17">
+  <link rel="manifest" href="manifest.json?v=18">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <title>Fractal - Planejador Visual</title>
-  <link rel="stylesheet" href="css/styles.css?v=17">
+  <link rel="stylesheet" href="css/styles.css?v=18">
 </head>
 <body>
 
@@ -48,6 +48,8 @@
       <button class="btn btn-texto" id="btn-som">Som: ligado</button>
       <span class="sep-rodape">•</span>
       <span class="versao" id="conta-resumo">Conta: local</span>
+      <span class="sep-rodape">•</span>
+      <button class="btn btn-texto" id="btn-ajuda">Como usar</button>
       <span class="sep-rodape">•</span>
       <a class="btn btn-texto" href="privacidade.html">Privacidade</a>
       <span class="sep-rodape">•</span>
@@ -192,8 +194,37 @@
           <button class="btn btn-perigo" id="btn-apagar-dados">Apagar meus dados</button>
         </div>
       </div>
+
+      <!-- Só no app Android: o navegador não agenda notificações. -->
+      <div class="conta-cartao" id="conta-lembrete" hidden>
+        <h2 class="conta-titulo">Lembrete das metas</h2>
+        <p class="conta-texto">
+          Uma notificação por dia para registrar o progresso das suas metas.
+          Ela só aparece se houver meta em andamento e se você ainda não
+          registrou nada no dia. É gerada no próprio aparelho: nada é enviado
+          para fora.
+        </p>
+        <div class="lembrete-linha">
+          <label class="lembrete-chave">
+            <input type="checkbox" id="lembrete-ativo">
+            <span>Lembrar todo dia às</span>
+          </label>
+          <input class="campo lembrete-hora" type="time" id="lembrete-hora" value="20:00">
+        </div>
+      </div>
     </div>
   </section>
+
+  <!-- ============ TUTORIAL (primeira abertura) ============ -->
+  <div class="tutorial-overlay" id="tutorial-overlay" hidden>
+    <div class="tutorial" role="dialog" aria-modal="true" aria-labelledby="tutorial-titulo">
+      <div class="tutorial-figura" id="tutorial-figura" aria-hidden="true"></div>
+      <h2 class="tutorial-titulo" id="tutorial-titulo"></h2>
+      <p class="tutorial-texto" id="tutorial-texto"></p>
+      <div class="tutorial-pontos" id="tutorial-pontos" aria-hidden="true"></div>
+      <div class="tutorial-acoes" id="tutorial-acoes"></div>
+    </div>
+  </div>
 
   <!-- ============ MODAIS ============ -->
   <div class="modal-overlay" id="modal-overlay" hidden>
@@ -236,13 +267,15 @@
     };
   </script>
 
-  <script src="js/versao.js?v=17"></script>
-  <script src="js/storage.js?v=17"></script>
-  <script src="js/app.js?v=17"></script>
-  <script src="js/config.js?v=17"></script>
-  <script src="js/google-auth.js?v=17"></script>
-  <script src="js/drive-sync.js?v=17"></script>
-  <script src="js/sync.js?v=17"></script>
-  <script src="js/conta.js?v=17"></script>
+  <script src="js/versao.js?v=18"></script>
+  <script src="js/storage.js?v=18"></script>
+  <script src="js/app.js?v=18"></script>
+  <script src="js/config.js?v=18"></script>
+  <script src="js/google-auth.js?v=18"></script>
+  <script src="js/drive-sync.js?v=18"></script>
+  <script src="js/sync.js?v=18"></script>
+  <script src="js/conta.js?v=18"></script>
+  <script src="js/tutorial.js?v=18"></script>
+  <script src="js/lembrete.js?v=18"></script>
 </body>
 </html>

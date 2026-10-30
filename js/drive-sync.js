@@ -170,16 +170,17 @@ const DriveSync = (() => {
     return await res.json();
   }
 
-  /* Pasta "Círculos" + subpasta "Anexos". Reaproveita se já existirem. */
+  /* Pasta "Fractal" + subpasta "Anexos". Reaproveita se já existirem.
+     O índice guarda o id da SUBPASTA Anexos. Se o usuário a apagou ou mandou
+     para a lixeira, procura pelo nome e recria o que faltar. */
   async function pastaAnexos(idConhecida) {
     if (idConhecida) {
       try {
-        const res = await fetch(API + '/files/' + encodeURIComponent(idConhecida) + '?fields=' + encodeURIComponent('id,name'),
+        const res = await fetch(API + '/files/' + encodeURIComponent(idConhecida) + '?fields=' + encodeURIComponent('id,trashed,mimeType'),
           { headers: await cabecalhos() });
         if (res.ok) {
           const j = await res.json();
-          const sub = await acharPasta(nomeSubPasta(), j.id);
-          if (sub) return { pasta: j.id, anexos: sub.id };
+          if (!j.trashed && j.mimeType === MIME_PASTA) return { anexos: j.id };
         }
       } catch (e) { /* id velha: recria abaixo */ }
     }
@@ -196,7 +197,7 @@ const DriveSync = (() => {
     let token = null;
     do {
       const q = encodeURIComponent("'" + pastaId + "' in parents and trashed = false");
-      const campos = encodeURIComponent('nextPageToken,files(id,name,size,mimeType)');
+      const campos = encodeURIComponent('nextPageToken,files(id,name,size,mimeType,appProperties)');
       const url = API + '/files?q=' + q + '&fields=' + campos + '&pageSize=200' +
         (token ? '&pageToken=' + encodeURIComponent(token) : '');
       const res = await fetch(url, { headers: await cabecalhos() });
@@ -207,27 +208,76 @@ const DriveSync = (() => {
         nome: f.name || '',
         tam: Number(f.size) || 0,
         mime: f.mimeType || 'application/octet-stream',
+        idAnexo: idDoArquivo(f),
       }));
       token = j.nextPageToken || null;
     } while (token);
     return out;
   }
 
-  /* Nome do arquivo no Drive: "<id do anexo> - <nome original>".
-     O id na frente garante unicidade e permite achar o arquivo
-     pelo indice sem depender de id do Drive. */
+  /* O arquivo fica no Drive com o nome original, legível para quem abre a
+     pasta. O id do anexo vai em appProperties, que o usuário não vê. */
   function nomeNoDrive(idAnexo, nomeOriginal) {
-    const limpo = String(nomeOriginal || 'arquivo').replace(/[\/\\]/g, '_').slice(0, 120);
-    return idAnexo + ' - ' + limpo;
+    return String(nomeOriginal || 'arquivo').replace(/[\/\\]/g, '_').slice(0, 120);
   }
 
+  /* Versões anteriores usavam o nome "<uuid> - <nome original>". */
+  const NOME_ANTIGO = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9]{16,}) - (.+)$/i;
+
   function idDoNome(nome) {
-    const i = String(nome || '').indexOf(' - ');
-    return i > 0 ? nome.slice(0, i) : '';
+    const m = NOME_ANTIGO.exec(String(nome || ''));
+    return m ? m[1] : '';
+  }
+
+  function idDoArquivo(f) {
+    return (f.appProperties && f.appProperties.fractalId) || idDoNome(f.name);
+  }
+
+  async function listarPorConsulta(consulta) {
+    const q = encodeURIComponent(consulta);
+    const campos = encodeURIComponent('files(id,name,parents,appProperties)');
+    const res = await fetch(API + '/files?q=' + q + '&fields=' + campos + '&pageSize=200', { headers: await cabecalhos() });
+    if (!res.ok) throw await erroDe(res);
+    return (await res.json()).files || [];
+  }
+
+  /* Põe ordem no que o Fractal já enviou: traz para a pasta Anexos os
+     arquivos que ficaram soltos na raiz do Drive e tira o id do nome dos
+     arquivos antigos. Só toca em arquivos do próprio app (é o que o escopo
+     drive.file enxerga) e cujo id está em "conhecidos". */
+  async function organizar(pastaId, conhecidos) {
+    const soltos = await listarPorConsulta("'root' in parents and mimeType != '" + MIME_PASTA + "' and trashed = false");
+    const naPasta = await listarPorConsulta("'" + pastaId + "' in parents and trashed = false");
+    let ajustados = 0;
+
+    for (const [lista, mover] of [[soltos, true], [naPasta, false]]) {
+      for (const f of lista) {
+        const id = idDoArquivo(f);
+        if (!id || !conhecidos.has(id)) continue;
+        const antigo = NOME_ANTIGO.exec(f.name || '');
+        if (!mover && !antigo) continue;
+
+        const meta = { appProperties: { fractalId: id } };
+        if (antigo) meta.name = antigo[2];
+        let url = API + '/files/' + encodeURIComponent(f.id) + '?fields=id';
+        if (mover) {
+          url += '&addParents=' + encodeURIComponent(pastaId) +
+            '&removeParents=' + encodeURIComponent((f.parents || []).join(','));
+        }
+        const r = await fetch(url, {
+          method: 'PATCH',
+          headers: await cabecalhos({ 'Content-Type': 'application/json; charset=UTF-8' }),
+          body: JSON.stringify(meta),
+        });
+        if (!r.ok) throw await erroDe(r);
+        ajustados++;
+      }
+    }
+    return ajustados;
   }
 
   /* Envia o binário de um anexo. */
-  async function enviarBinario(pastaId, nome, mime, blob, arquivoIdExistente) {
+  async function enviarBinario(pastaId, nome, mime, blob, arquivoIdExistente, idAnexo) {
     if (arquivoIdExistente) {
       /* Substitui o conteúdo de um arquivo que já existe. */
       const url = UPLOAD + '/' + encodeURIComponent(arquivoIdExistente) + '?uploadType=media&fields=' + encodeURIComponent('id,name,size');
@@ -240,8 +290,9 @@ const DriveSync = (() => {
       return await res.json();
     }
 
+    const meta = { name: nome, parents: [pastaId], appProperties: { fractalId: idAnexo || '' } };
+
     if (blob.size <= LIMITE_SIMPLES) {
-      const meta = { name: nome, parents: [pastaId] };
       const limite = 'fractal-bin-' + Math.random().toString(36).slice(2);
       const corpo = new Blob([
         '--' + limite + '\r\n',
@@ -264,7 +315,6 @@ const DriveSync = (() => {
     }
 
     /* Arquivo grande: upload resumable em pedaços. */
-    const meta = { name: nome, parents: [pastaId] };
     const url = UPLOAD + '?uploadType=resumable&fields=' + encodeURIComponent('id,name,size,mimeType');
     const res = await fetch(url, {
       method: 'POST',
@@ -348,7 +398,7 @@ const DriveSync = (() => {
 
   return {
     encontrar, baixar, enviar, arquivo,
-    pastaAnexos, listar, nomeNoDrive, idDoNome,
+    pastaAnexos, listar, organizar, nomeNoDrive, idDoNome,
     enviarBinario, baixarBinario, apagarArquivo, apagarTudo, espaco,
   };
 })();

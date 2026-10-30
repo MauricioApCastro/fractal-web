@@ -372,6 +372,6 @@ function registrarServiceWorker() {
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
   } catch (err) { /* segue o fluxo normal */ }
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=17', { updateViaCache: 'none' }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=18', { updateViaCache: 'none' }).catch(() => {});
   });
 }

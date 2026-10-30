@@ -29,6 +29,8 @@ const Sync = (() => {
   let ouvintes = [];
   let avisos = [];          // avisos da última sincronização (cota, etc.)
   let cota = null;          // { limite, uso, livre } do Drive
+  let ultimaTentativa = 0;  // ms da última sincronização iniciada
+  const INTERVALO_BUSCA = 60 * 1000;
 
   function config() {
     return (typeof FractalConfig !== 'undefined' && FractalConfig.sync) || {};
@@ -185,8 +187,9 @@ const Sync = (() => {
       return status();
     }
     rodando = true;
+    ultimaTentativa = Date.now();
     avisos = [];
-    definir('pendente', 'Sincronizando...');
+    definir('sincronizando', 'Sincronizando...');
     try {
       const local = await projetosLocais();
       const arquivo = await DriveSync.encontrar();
@@ -225,13 +228,15 @@ const Sync = (() => {
       const usados = anexosDosProjetos(finais);
       const indice = Object.assign({}, (remoto && remoto.anexos) || {});
       const pasta = await DriveSync.pastaAnexos(remoto && remoto.pastaAnexos);
+      try {
+        await DriveSync.organizar(pasta.anexos, new Set([...usados.keys(), ...Object.keys(indice)]));
+      } catch (e) { /* arrumação é opcional: não impede a sincronização */ }
       const arquivos = await DriveSync.listar(pasta.anexos);
 
       /* o que já está no Drive, indexado pelo id do anexo */
       const noDrive = new Map();
       arquivos.forEach(f => {
-        const id = DriveSync.idDoNome(f.nome);
-        if (id) noDrive.set(id, f);
+        if (f.idAnexo) noDrive.set(f.idAnexo, f);
       });
 
       let enviados = 0, baixados = 0, apagados = 0;
@@ -294,7 +299,8 @@ const Sync = (() => {
             pasta.anexos, nome,
             localBlob.type || 'application/octet-stream',
             localBlob,
-            arquivoDrive && registro ? arquivoDrive.id : null);
+            arquivoDrive && registro ? arquivoDrive.id : null,
+            id);
           indice[id] = {
             nome: anexo.nome || nome,
             tipo: anexo.tipo || 'arquivo',
@@ -373,14 +379,32 @@ const Sync = (() => {
     timer = setTimeout(() => { sincronizar(); }, (Number(config().esperaMs) || 4000));
   }
 
+  /* Traz o que mudou em outro aparelho sem o usuário pedir: ao voltar para o
+     app, ao recuperar a internet e, com o app aberto, de tempos em tempos.
+     Não roda com um projeto aberto: a tela seguiria mostrando a cópia antiga. */
+  function buscarNovidades() {
+    if (!GoogleAuth.logado() || rodando || destruindo || situacao === 'pendente') return;
+    if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
+    if (typeof Estado !== 'undefined' && Estado.atual) return;
+    if (Date.now() - ultimaTentativa < INTERVALO_BUSCA) return;
+    sincronizar();
+  }
+
+  function ligarBuscaAutomatica() {
+    document.addEventListener('visibilitychange', buscarNovidades);
+    window.addEventListener('online', buscarNovidades);
+    setInterval(buscarNovidades, INTERVALO_BUSCA);
+  }
+
   async function iniciar() {
     await GoogleAuth.restaurarTokens();
     if (GoogleAuth.logado()) {
-      definir('pendente', 'Conectado. Sincronizando...');
+      definir('sincronizando', 'Conectado. Sincronizando...');
       await sincronizar();
     } else {
       definir('local', '');
     }
+    ligarBuscaAutomatica();
     notificar();
   }
 
