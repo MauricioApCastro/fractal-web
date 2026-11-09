@@ -17,7 +17,7 @@
 const FractalConfig = {
   google: {
     webClientId: '294020392329-vei375320terek71auhtm50vge5o1u7f.apps.googleusercontent.com',
-    androidClientId: '294020392329-e2lu6k3f8isfq5fk59jctdmuf8mrppfg.apps.googleusercontent.com',
+    androidClientId: '294020392329-ineeoo5kvbtn3eg63h10m2td89tn5h04.apps.googleusercontent.com',
 
     // Escopos: todos NÃO sensíveis, então o Google não exige
     // verificação do app (nem avaliação de segurança) e não há custo.

@@ -12,24 +12,24 @@
  *    em segundo plano.
  * ============================================================ */
 
-const CACHE = 'fractal-v18';
+const CACHE = 'fractal-v19';
 
 const CORE = [
   './',
-  './?v=18',
+  './?v=19',
   './index.html',
-  './manifest.json?v=18',
-  './css/styles.css?v=18',
-  './js/versao.js?v=18',
-  './js/storage.js?v=18',
-  './js/app.js?v=18',
-  './js/config.js?v=18',
-  './js/google-auth.js?v=18',
-  './js/drive-sync.js?v=18',
-  './js/sync.js?v=18',
-  './js/conta.js?v=18',
-  './js/tutorial.js?v=18',
-  './js/lembrete.js?v=18',
+  './manifest.json?v=19',
+  './css/styles.css?v=19',
+  './js/versao.js?v=19',
+  './js/storage.js?v=19',
+  './js/app.js?v=19',
+  './js/config.js?v=19',
+  './js/google-auth.js?v=19',
+  './js/drive-sync.js?v=19',
+  './js/sync.js?v=19',
+  './js/conta.js?v=19',
+  './js/tutorial.js?v=19',
+  './js/lembrete.js?v=19',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',

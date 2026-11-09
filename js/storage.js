@@ -93,6 +93,25 @@ function novoMiolo(nome) {
   return { nome, anotacoes: '', itens: [], anexos: [] };
 }
 
+/* Compromisso de um item: data e hora (consulta, remédio...). Fica fora da
+ * meta porque não tem progresso. repetir 'diario' serve para remédios: aí a
+ * data não importa, só a hora. antes = minutos de antecedência do lembrete. */
+const ANTECEDENCIAS = [0, 10, 30, 60, 120, 1440];
+
+function normalizarCompromisso(c) {
+  if (!c || typeof c !== 'object') return null;
+  const hora = /^\d{2}:\d{2}$/.test(String(c.hora || '')) ? String(c.hora) : '';
+  // 'mensal' é para contas: a data dá o primeiro vencimento e o dia do mês.
+  const repetir = ['diario', 'mensal'].includes(c.repetir) ? c.repetir : 'nao';
+  const data = /^\d{4}-\d{2}-\d{2}$/.test(String(c.data || '')) ? String(c.data) : '';
+  if (!hora || (repetir !== 'diario' && !data)) return null;
+  const antes = ANTECEDENCIAS.includes(Number(c.antes)) ? Number(c.antes) : 30;
+  const normal = { data, hora, repetir, antes };
+  // Conta paga até este mês (AAAA-MM): os avisos voltam no mês seguinte.
+  if (repetir === 'mensal' && /^\d{4}-\d{2}$/.test(String(c.pagoAte || ''))) normal.pagoAte = c.pagoAte;
+  return normal;
+}
+
 function novoItem(nome, cor) {
   return { nome: nome, cor: cor || 0, concluido: false, miolo: novoMiolo(nome) };
 }
@@ -124,7 +143,12 @@ function metaDoJson(d) {
     }
   }
   const prazoManual = d.prazoManual || d.PrazoManual || '';
-  return { dias, progresso, inicio, prazo, prazoManual };
+  // O tipo precisa sobreviver: sem ele, a meta por contagem ganhava um prazo
+  // calculado e passava a ser lida como meta por prazo ao reabrir o projeto.
+  const tipoBruto = d.tipo || d.Tipo;
+  const meta = { dias, progresso, inicio, prazo, prazoManual };
+  if (tipoBruto === 'contagem' || tipoBruto === 'prazo') meta.tipo = tipoBruto;
+  return meta;
 }
 
 /* Arquivos importados vêm de fora: força os tipos que o app espera, para um
@@ -161,6 +185,7 @@ function mioloDoJson(d) {
       concluido: p.concluido === true || p.Concluido === true || p.feito === true || p.Feito === true,
       concluidoEm: textoDoJson(p.concluidoEm != null ? p.concluidoEm : p.ConcluidoEm, null),
       meta: metaDoJson(p.meta || p.Meta),
+      compromisso: normalizarCompromisso(p.compromisso || p.Compromisso),
       anotacoes: textoDoJson(p.anotacoes != null ? p.anotacoes : p.Anotacoes, ''),
       miolo: pMiolo ? mioloDoJson(pMiolo) : novoMiolo(pNome),
     };
@@ -213,7 +238,9 @@ function mioloParaJson(m) {
         Inicio: p.meta.inicio,
         Prazo: p.meta.prazo,
         PrazoManual: p.meta.prazoManual || '',
+        Tipo: p.meta.tipo || '',
       } : null,
+      Compromisso: normalizarCompromisso(p.compromisso),
       Miolo: p.miolo ? mioloParaJson(p.miolo) : null,
     })),
     Anexos: (m.anexos || []).map(a => ({
@@ -372,6 +399,6 @@ function registrarServiceWorker() {
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
   } catch (err) { /* segue o fluxo normal */ }
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=18', { updateViaCache: 'none' }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=19', { updateViaCache: 'none' }).catch(() => {});
   });
 }

@@ -451,9 +451,89 @@ function infoPrazoMeta(meta) {
   return 'Restam ' + dias + (dias === 1 ? ' dia' : ' dias');
 }
 
+/* O que o círculo mostra abaixo do nome: só o essencial. */
+function textoFaltamMeta(meta) {
+  if (!meta) return '';
+  if (meta.progresso >= meta.dias) return 'meta concluída';
+  if (meta.tipo === 'prazo') {
+    const dias = diasAtePrazo(meta.prazoManual || meta.prazo);
+    if (dias === null) return '';
+    if (dias < 0) return 'atrasada ' + Math.abs(dias) + (Math.abs(dias) === 1 ? ' dia' : ' dias');
+    if (dias === 0) return 'termina hoje';
+    return 'faltam ' + dias + (dias === 1 ? ' dia' : ' dias');
+  }
+  const faltam = meta.dias - meta.progresso;
+  return 'faltam ' + faltam + (faltam === 1 ? ' dia' : ' dias');
+}
+
+/* Conta (compromisso mensal): vence todo mês no dia da data escolhida. Em
+ * meses mais curtos (dia 31 em fevereiro) vence no último dia do mês. */
+function mesDe(data) {
+  return data.getFullYear() + '-' + String(data.getMonth() + 1).padStart(2, '0');
+}
+
+function vencimentoNoMes(c, ano, mes) {
+  const dia = Number(c.data.slice(8, 10));
+  const ultimo = new Date(ano, mes + 1, 0).getDate();
+  const [h, m] = c.hora.split(':').map(Number);
+  return new Date(ano, mes, Math.min(dia, ultimo), h, m, 0, 0);
+}
+
+/* O primeiro vencimento ainda não pago, a partir deste mês. */
+function vencimentoPendente(c, aPartirDe) {
+  const inicio = new Date(c.data + 'T12:00:00');
+  let ref = aPartirDe || new Date();
+  if (ref < inicio) ref = inicio;
+  let ano = ref.getFullYear(), mes = ref.getMonth();
+  for (let i = 0; i < 240; i++) {
+    const venc = vencimentoNoMes(c, ano, mes);
+    if (!c.pagoAte || mesDe(venc) > c.pagoAte) return venc;
+    mes++; if (mes > 11) { mes = 0; ano++; }
+  }
+  return vencimentoNoMes(c, ano, mes);
+}
+
+function textoCompromisso(c) {
+  if (!c) return '';
+  if (c.repetir === 'diario') return 'todo dia ' + c.hora;
+  if (c.repetir === 'mensal') {
+    const venc = vencimentoPendente(c);
+    const ddmm = String(venc.getDate()).padStart(2, '0') + '/' + String(venc.getMonth() + 1).padStart(2, '0');
+    const pagaEsteMes = c.pagoAte && c.pagoAte >= mesDe(new Date());
+    return (pagaEsteMes ? 'paga • próx. ' : 'vence ') + ddmm;
+  }
+  const partes = c.data.split('-');
+  return partes[2] + '/' + partes[1] + ' ' + c.hora;
+}
+
+function resumoNotas(texto) {
+  return String(texto || '').replace(/\s+/g, ' ').trim();
+}
+
+/* Palavra comprida não quebra no meio: a fonte diminui até caber no
+ * círculo. Frase continua quebrando entre as palavras, normalmente. */
+function ajustarNomesAoCirculo(raiz) {
+  raiz.querySelectorAll('.nome-fractal').forEach(el => {
+    el.style.fontSize = '';
+    let tamanho = parseFloat(getComputedStyle(el).fontSize) || 13;
+    let voltas = 0;
+    while (el.scrollWidth > el.clientWidth + 1 && tamanho > 7 && voltas++ < 40) {
+      tamanho -= 0.5;
+      el.style.fontSize = tamanho + 'px';
+    }
+  });
+}
+
+/* Conta paga no mês atual. A marca guarda o mês pago (pagoAte), então na
+ * virada do mês ela deixa de valer sozinha e a conta volta a aparecer aberta. */
+function contaPagaNoMes(item) {
+  const c = normalizarCompromisso(item.compromisso);
+  return !!(c && c.repetir === 'mensal' && c.pagoAte && c.pagoAte >= mesDe(new Date()));
+}
+
 function itemConcluido(item) {
   const meta = normalizarMeta(item.meta);
-  return item.concluido === true || (meta && meta.progresso >= meta.dias);
+  return item.concluido === true || (meta && meta.progresso >= meta.dias) || contaPagaNoMes(item);
 }
 
 function progressoAgregado(item) {
@@ -589,33 +669,21 @@ function renderizarFlor() {
   cnome.textContent = miolo.nome || 'Sem nome';
   centro.appendChild(cnome);
 
-  const nAnexos = (miolo.anexos || []).length;
-  const csub = document.createElement('div');
-  csub.className = 'sub-fractal';
+  /* Abaixo do nome, o centro mostra só o que importa: quanto falta da meta,
+   * a data do compromisso e as anotações do círculo. */
+  const paiDoCentro = Estado.itemPai && miolo === Estado.itemPai.miolo ? Estado.itemPai : null;
+  const compromissoCentro = paiDoCentro ? normalizarCompromisso(paiDoCentro.compromisso) : null;
+  const notasCentro = resumoNotas(miolo.anotacoes || (paiDoCentro ? paiDoCentro.anotacoes : ''));
   const infoCentro = [];
-  if (metaAtiva) {
-    /* Percentual primeiro, como padrão de leitura na flor. A fração fica
-     * abaixo e o texto de prazo só aparece quando o tipo cobra data. */
-    const pctMeta = percentualMeta(metaAtiva);
-    infoCentro.push(pctMeta >= 100 ? '100%' : pctMeta + '%');
-    infoCentro.push(metaAtiva.progresso + '/' + metaAtiva.dias + ' dias');
-    infoCentro.push(infoPrazoMeta(metaAtiva));
-    if (metaAtiva.progresso >= metaAtiva.dias) {
-      const dtPai = Estado.itemPai && Estado.itemPai.concluidoEm
-        ? ' ' + formatarDataMeta(Estado.itemPai.concluidoEm) : '';
-      infoCentro.push('concluído' + dtPai);
-    }
-  } else if (n > 0) {
-    /* Centro do projeto: porcentagem de itens concluídos. A fração sai
-     * daqui — quem tem filhos já mostra "x/y" no próprio item. */
-    const pctCentro = Math.round(nConcluidos / n * 100);
-    infoCentro.push(pctCentro >= 100 ? '100%' : pctCentro + '%');
-    infoCentro.push(nConcluidos + '/' + n + (nConcluidos === 1 ? ' concluído' : ' concluídos'));
+  if (metaAtiva) infoCentro.push(textoFaltamMeta(metaAtiva));
+  if (compromissoCentro) infoCentro.push(textoCompromisso(compromissoCentro));
+  if (notasCentro) infoCentro.push(notasCentro);
+  if (infoCentro.length) {
+    const csub = document.createElement('div');
+    csub.className = 'sub-fractal';
+    csub.textContent = infoCentro.join(' • ');
+    centro.appendChild(csub);
   }
-  if (nAnexos > 0) infoCentro.push(nAnexos + ' anexo(s)');
-  infoCentro.push('toque p/ editar');
-  csub.textContent = infoCentro.join(' • ');
-  centro.appendChild(csub);
 
   if (metaAtiva) {
     const progresso = document.createElement('div');
@@ -674,6 +742,7 @@ function renderizarFlor() {
     if (meta) el.classList.add('meta');
     if (agregado) el.classList.add('tem-metas');
     if (concluido) el.classList.add('concluido');
+    if (contaPagaNoMes(item)) el.classList.add('conta-paga');
     el.style.background = 'transparent';
     el.style.left = x + 'px';
     el.style.top = y + 'px';
@@ -691,10 +760,11 @@ function renderizarFlor() {
     nome.textContent = item.nome || '...';
     el.appendChild(nome);
 
-    if (meta) {
+    const compromisso = normalizarCompromisso(item.compromisso);
+    if (meta || compromisso) {
       const etiquetaMeta = document.createElement('span');
       etiquetaMeta.className = 'etiqueta-meta';
-      etiquetaMeta.textContent = 'META';
+      etiquetaMeta.textContent = meta ? 'META' : (compromisso.repetir === 'mensal' ? 'CONTA' : 'COMPROMISSO');
       el.appendChild(etiquetaMeta);
     }
 
@@ -707,42 +777,17 @@ function renderizarFlor() {
       el.appendChild(marca);
     }
 
-    const subItens = item.miolo ? item.miolo.itens.length : 0;
-    const subAnexos = item.miolo ? item.miolo.anexos.length : 0;
-    const textoItens = subItens === 1 ? '1 item' : subItens + ' itens';
-
-    /* Progresso em % vale para meta e para item comum: é o padrão na flor.
-     * Item vazio (sem filhos e sem meta) não tem o que medir, então não
-     * mostra número — só o anel, que também não aparece nesse caso. */
-    const pct = meta ? percentualMeta(meta)
-      : agregado ? Math.round(agregado.progresso / agregado.dias * 100)
-        : (subItens > 0
-          ? Math.round(item.miolo.itens.filter(i => itemConcluido(i)).length / subItens * 100)
-          : null);
-    const pctTexto = pct === null ? '' : pct + '%';
-
-    /* Meta e centro mostram a fração (o anel já dá o %); item comum mostra
-     * quantos filhos estão feitos, o que a porcentagem sozinha não diz. */
-    let subTxt = '';
-    if (meta) {
-      subTxt = meta.progresso + '/' + meta.dias + ' dias';
-    } else if (subItens > 0) {
-      const feitos = item.miolo.itens.filter(i => itemConcluido(i)).length;
-      subTxt = feitos + '/' + subItens + (subAnexos > 0 ? ' • ' + subAnexos : '');
-    } else if (subAnexos > 0) {
-      subTxt = subAnexos + ' anexo(s)';
+    /* Abaixo do nome: data do compromisso, quanto falta da meta ou as
+     * anotações do item. O anel continua mostrando o progresso. */
+    const subTxt = compromisso ? textoCompromisso(compromisso)
+      : meta ? textoFaltamMeta(meta)
+        : resumoNotas(item.anotacoes || (item.miolo ? item.miolo.anotacoes : ''));
+    if (subTxt) {
+      const sub = document.createElement('div');
+      sub.className = 'sub-fractal';
+      sub.textContent = subTxt;
+      el.appendChild(sub);
     }
-    if (concluido) {
-      // Concluído mostra a data; em meta o "x/y dias" sai (anel/selo já indicam).
-      const base = meta ? '' : subTxt;
-      subTxt = (base ? base + ' • ' : '') + textoConclusao(item);
-    }
-
-    const sub = document.createElement('div');
-    sub.className = 'sub-fractal';
-    // A porcentagem vem primeiro: é o padrão de leitura na flor.
-    sub.textContent = pctTexto ? pctTexto + (subTxt ? ' • ' + subTxt : '') : subTxt;
-    el.appendChild(sub);
 
     const ordem = document.createElement('span');
     ordem.className = 'menu-fractal';
@@ -786,6 +831,7 @@ function renderizarFlor() {
     area.appendChild(el);
   });
 
+  ajustarNomesAoCirculo(area);
   aplicarEscala();
 }
 
@@ -953,7 +999,10 @@ function editarMiolo() {
     miolo.anotacoes = notas;
     // O centro interno é o espelho do item pai: sem isso, editar o
     // círculo filho não atualiza o nome na tela de fora (e vice-versa).
-    if (Estado.itemPai && Estado.itemPai.miolo === miolo) Estado.itemPai.nome = nome;
+    if (Estado.itemPai && Estado.itemPai.miolo === miolo) {
+      Estado.itemPai.nome = nome;
+      Estado.itemPai.anotacoes = notas;
+    }
     // O centro da raiz tambem da o nome ao projeto na lista de projetos.
     if (Estado.atual && miolo === Estado.atual.raiz) Estado.atual.nome = nome;
     guardar();
@@ -1130,6 +1179,12 @@ function mostrarOpcoesItem(item) {
         cor: 'sucesso',
         acao: () => transformarEmMeta(item),
       };
+  const compromisso = normalizarCompromisso(item.compromisso);
+  const opcaoCompromisso = meta ? null
+    : compromisso
+      ? { texto: 'Editar compromisso', acao: () => editarCompromisso(item) }
+      : { texto: 'Compromisso (data e hora)', cor: 'sucesso', acao: () => editarCompromisso(item) };
+  const opcaoMetaFinal = compromisso ? null : opcaoMeta;
   const opcaoConclusao = meta
     ? (meta.progresso >= meta.dias || itemConcluido(item)
         ? {
@@ -1185,12 +1240,51 @@ function mostrarOpcoesItem(item) {
         item.nome = n;
         if (item.miolo) item.miolo.nome = n;
         item.anotacoes = notas;
+        // O centro do item mostra estas anotações: mantém os dois iguais.
+        if (item.miolo) item.miolo.anotacoes = notas;
         guardar();
         renderizarFlor();
       }),
     },
     { texto: 'Anexos', acao: () => abrirAnexos(item) },
-    opcaoMeta,
+    opcaoMetaFinal,
+    opcaoCompromisso,
+    compromisso && compromisso.repetir === 'mensal' ? (() => {
+      const venc = vencimentoPendente(compromisso);
+      const pagaEsteMes = compromisso.pagoAte && compromisso.pagoAte >= mesDe(new Date());
+      return pagaEsteMes
+        ? {
+            texto: 'Desfazer pagamento',
+            acao: async () => {
+              delete compromisso.pagoAte;
+              item.compromisso = compromisso;
+              await guardar();
+              renderizarFlor();
+              toast('Pagamento desfeito.');
+            },
+          }
+        : {
+            texto: 'Marcar como paga (' + String(venc.getMonth() + 1).padStart(2, '0') + '/' + venc.getFullYear() + ')',
+            cor: 'sucesso',
+            acao: async () => {
+              compromisso.pagoAte = mesDe(venc);
+              item.compromisso = compromisso;
+              Som.centro();
+              await guardar();
+              renderizarFlor();
+              toast('Conta paga. O lembrete volta no próximo mês.');
+            },
+          };
+    })() : null,
+    compromisso ? {
+      texto: 'Remover compromisso',
+      acao: async () => {
+        delete item.compromisso;
+        await guardar();
+        renderizarFlor();
+        toast('Compromisso removido.');
+      },
+    } : null,
     opcaoConclusao,
     {
       texto: 'Apagar item',
@@ -1205,6 +1299,62 @@ function mostrarOpcoesItem(item) {
     },
   ]);
 }
+
+const ROTULOS_ANTES = {
+  0: 'Na hora', 10: '10 minutos antes', 30: '30 minutos antes',
+  60: '1 hora antes', 120: '2 horas antes', 1440: '1 dia antes',
+};
+
+/* Compromisso: consulta, remédio, reunião... O círculo mostra só o nome e a
+ * data/hora, e o celular avisa no horário escolhido. */
+async function editarCompromisso(item) {
+  const atual = normalizarCompromisso(item.compromisso) ||
+    { data: dataLocalISO(), hora: '09:00', repetir: 'nao', antes: 30 };
+  const opcoesAntes = Object.keys(ROTULOS_ANTES).map(m =>
+    '<option value="' + m + '"' + (Number(m) === atual.antes ? ' selected' : '') + '>' + ROTULOS_ANTES[m] + '</option>'
+  ).join('');
+  const aberto = abrirModal('Compromisso: ' + (item.nome || ''),
+    '<label for="comp-repetir">Repetir</label>' +
+    '<select class="campo" id="comp-repetir">' +
+    '<option value="nao"' + (atual.repetir === 'nao' ? ' selected' : '') + '>Só uma vez (consulta, reunião)</option>' +
+    '<option value="diario"' + (atual.repetir === 'diario' ? ' selected' : '') + '>Todo dia (remédio)</option>' +
+    '<option value="mensal"' + (atual.repetir === 'mensal' ? ' selected' : '') + '>Todo mês (conta a pagar)</option>' +
+    '</select>' +
+    '<div id="comp-linha-data"><label for="comp-data">Data <small id="comp-ajuda-data">' +
+    (atual.repetir === 'mensal' ? '(vence todo mês neste dia)' : '') + '</small></label>' +
+    '<input class="campo" id="comp-data" type="date" value="' + escapeHtml(atual.data) + '"></div>' +
+    '<label for="comp-hora">Hora</label>' +
+    '<input class="campo" id="comp-hora" type="time" value="' + escapeHtml(atual.hora) + '">' +
+    '<label for="comp-antes">Lembrete no celular</label>' +
+    '<select class="campo" id="comp-antes">' + opcoesAntes + '</select>',
+    'Salvar');
+  $('#comp-linha-data').hidden = atual.repetir === 'diario';
+  if ((await aberto) !== 'ok') return;
+  const novo = normalizarCompromisso({
+    repetir: $('#comp-repetir').value,
+    data: $('#comp-data').value,
+    hora: $('#comp-hora').value,
+    antes: Number($('#comp-antes').value),
+    // Mudar o dia da conta não apaga o mês já pago.
+    pagoAte: atual.pagoAte,
+  });
+  if (!novo) { toast('Informe a data e a hora.'); return; }
+  item.compromisso = novo;
+  await guardar();
+  renderizarFlor();
+  if (typeof Lembrete !== 'undefined' && Lembrete) Lembrete.informar(true);
+  toast('Compromisso salvo: ' + textoCompromisso(novo) + '.');
+}
+
+/* Esconde a data quando o compromisso repete todo dia. */
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'comp-repetir') {
+    const linha = document.getElementById('comp-linha-data');
+    if (linha) linha.hidden = e.target.value === 'diario';
+    const ajuda = document.getElementById('comp-ajuda-data');
+    if (ajuda) ajuda.textContent = e.target.value === 'mensal' ? '(vence todo mês neste dia)' : '';
+  }
+});
 
 function novoItemFluxo() {
   prompt('Novo item', 'Nome do item:', '', '', nome => {
@@ -1523,7 +1673,7 @@ function mostrarSheet(titulo, opcoes) {
   $('#sheet-titulo').textContent = titulo;
   const cont = $('#sheet-opcoes');
   cont.innerHTML = '';
-  opcoes.forEach(op => {
+  opcoes.filter(Boolean).forEach(op => {
     const b = document.createElement('button');
     b.className = 'sheet-opcao' +
       (op.cor === 'danger' ? ' danger' : op.cor === 'sucesso' ? ' sucesso' : '');

@@ -65,13 +65,66 @@ const Lembrete = (() => {
     }, 0);
   }
 
-  async function informar() {
-    if (!ponte() || typeof window.fractalBridge.onMetasEstado !== 'function') return;
+  /* Compromissos em aberto, com o próximo aviso de cada um. O nativo só
+     recebe nome, horário e texto do aviso; o resto do projeto fica aqui. */
+  function compromissosPendentes(projetos) {
+    const lista = [];
+    const agora = Date.now();
+    const andar = miolo => (miolo && miolo.itens || []).forEach(item => {
+      const c = normalizarCompromisso(item.compromisso);
+      if (c && !item.concluido) {
+        const [h, m] = c.hora.split(':').map(Number);
+        let alvo;
+        if (c.repetir === 'diario') {
+          alvo = new Date(); alvo.setHours(h, m, 0, 0);
+          if (alvo.getTime() - c.antes * 60000 <= agora) alvo.setDate(alvo.getDate() + 1);
+        } else if (c.repetir === 'mensal') {
+          alvo = vencimentoPendente(c);
+          // O aviso deste vencimento já passou: vale o do mês seguinte.
+          if (alvo.getTime() - c.antes * 60000 <= agora) {
+            alvo = vencimentoPendente(c, new Date(alvo.getFullYear(), alvo.getMonth() + 1, 1));
+          }
+        } else {
+          alvo = new Date(c.data + 'T' + c.hora + ':00');
+        }
+        const quando = alvo.getTime() - c.antes * 60000;
+        if (quando > agora) {
+          const ddmm = String(alvo.getDate()).padStart(2, '0') + '/' + String(alvo.getMonth() + 1).padStart(2, '0');
+          const hoje = mesDe(alvo) === mesDe(new Date()) && alvo.getDate() === new Date().getDate();
+          const quandoTexto = c.repetir === 'diario' ? 'Hoje às ' + c.hora
+            : c.repetir === 'mensal' ? (hoje ? 'Conta vence hoje' : 'Conta vence dia ' + ddmm)
+              : (hoje ? 'Hoje às ' + c.hora : 'Dia ' + ddmm + ' às ' + c.hora);
+          lista.push({
+            titulo: item.nome || 'Compromisso',
+            texto: quandoTexto + (c.antes ? ' (lembrete ' + (ROTULOS_ANTES[c.antes] || '').toLowerCase() + ')' : ''),
+            quando,
+            diario: c.repetir === 'diario',
+            mensal: c.repetir === 'mensal',
+            dia: Number(c.data.slice(8, 10)) || 0,
+            hora: c.hora,
+            antes: c.antes,
+          });
+        }
+      }
+      andar(item.miolo);
+    });
+    projetos.forEach(p => andar(p.raiz));
+    return lista.sort((a, b) => a.quando - b.quando).slice(0, 60);
+  }
+
+  async function informar(pedirPermissao) {
+    if (!ponte()) return;
     try {
       const projetos = await Storage.listarProjetos();
-      const ativas = projetos.reduce((t, p) => t + metasEmAndamento(p.raiz), 0);
-      const ultimo = (await Storage.pegarConfig(CHAVE_ULTIMO)) || '';
-      window.fractalBridge.onMetasEstado(String(ativas), String(ultimo));
+      if (typeof window.fractalBridge.onMetasEstado === 'function') {
+        const ativas = projetos.reduce((t, p) => t + metasEmAndamento(p.raiz), 0);
+        const ultimo = (await Storage.pegarConfig(CHAVE_ULTIMO)) || '';
+        window.fractalBridge.onMetasEstado(String(ativas), String(ultimo));
+      }
+      if (typeof window.fractalBridge.onCompromissos === 'function') {
+        window.fractalBridge.onCompromissos(JSON.stringify(compromissosPendentes(projetos)),
+          pedirPermissao ? 'true' : 'false');
+      }
     } catch (e) { /* o lembrete usa o último estado informado */ }
   }
 

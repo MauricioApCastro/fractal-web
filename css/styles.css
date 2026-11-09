@@ -568,12 +568,24 @@ button {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  word-break: break-word;
+  /* Palavra não quebra no meio: o app diminui a fonte até caber
+     (ajustarNomesAoCirculo). Frases quebram entre as palavras. */
+  max-width: 100%;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .centro .nome-fractal { font-size: 15px; }
-.centro .sub-fractal { font-size: 9px; opacity: 0.7; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item .sub-fractal { font-size: 9px; opacity: 0.75; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.centro .sub-fractal, .item .sub-fractal {
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+.centro .sub-fractal { font-size: 10px; opacity: 0.8; -webkit-line-clamp: 3; }
+.item .sub-fractal { font-size: 9px; opacity: 0.85; -webkit-line-clamp: 2; }
 
 .menu-fractal {
   position: absolute;
@@ -1136,3 +1148,8 @@ textarea.campo { min-height: 110px; resize: vertical; }
   border-radius: 50%;
   animation: girar 0.8s linear infinite;
 }
+
+/* Conta paga no mês: só o selo ✓ e o anel completo. Sem risco nem visual
+   apagado, porque a conta continua ativa e volta no mês seguinte. */
+.item.concluido.conta-paga { filter: none; }
+.item.concluido.conta-paga .nome-fractal { text-decoration: none; }
