@@ -2132,6 +2132,11 @@ async function iniciar() {
     document.documentElement.dataset.wired = '1';
     $('#btn-som').textContent = Som.ligado() ? 'Som: ligado' : 'Som: desligado';
     registrarServiceWorker();
+    /* Primeiro uso neste aparelho: marca de pioneiro para quando o Pro chegar
+       (vai também para o Drive na sincronização; ver sync.js). */
+    if (!(await Storage.pegarConfig('primeiro_uso').catch(() => 'erro'))) {
+      await Storage.guardarConfig('primeiro_uso', new Date().toISOString()).catch(() => {});
+    }
     Estado.projetos = await Storage.listarProjetos();
     document.documentElement.dataset.listed = '1';
     mostrarTela('lista');

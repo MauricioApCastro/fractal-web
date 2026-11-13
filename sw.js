@@ -12,26 +12,26 @@
  *    em segundo plano.
  * ============================================================ */
 
-const CACHE = 'fractal-v21';
+const CACHE = 'fractal-v22';
 
 const CORE = [
   './',
-  './?v=21',
+  './?v=22',
   './index.html',
-  './manifest.json?v=21',
-  './css/styles.css?v=21',
-  './js/versao.js?v=21',
-  './js/storage.js?v=21',
-  './js/app.js?v=21',
-  './js/config.js?v=21',
-  './js/google-auth.js?v=21',
-  './js/drive-sync.js?v=21',
-  './js/sync.js?v=21',
-  './js/conta.js?v=21',
-  './js/tutorial.js?v=21',
-  './js/lembrete.js?v=21',
-  './js/fluxo.js?v=21',
-  './js/portao.js?v=21',
+  './manifest.json?v=22',
+  './css/styles.css?v=22',
+  './js/versao.js?v=22',
+  './js/storage.js?v=22',
+  './js/app.js?v=22',
+  './js/config.js?v=22',
+  './js/google-auth.js?v=22',
+  './js/drive-sync.js?v=22',
+  './js/sync.js?v=22',
+  './js/conta.js?v=22',
+  './js/tutorial.js?v=22',
+  './js/lembrete.js?v=22',
+  './js/fluxo.js?v=22',
+  './js/portao.js?v=22',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',

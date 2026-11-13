@@ -329,7 +329,12 @@ const Sync = (() => {
       /* Marca que esta conta já usou o app Android: é o que libera a versão
          web no mactecnology.com.br (ver portao.js). A marca nunca sai. */
       const noAndroid = GoogleAuth.temPonteNativa();
+      /* Desde quando a conta usa o Fractal (o mais antigo entre o Drive e este
+         aparelho). Serve para reconhecer os pioneiros quando o Pro chegar. */
+      const desdeLocal = await Storage.pegarConfig('primeiro_uso').catch(() => null);
+      const desde = [remoto && remoto.desde, desdeLocal].filter(Boolean).sort()[0];
       const mudou = !remoto || !iguais(finais, projetosRemotos) ||
+        (desde && desde !== remoto.desde) ||
         JSON.stringify(indice) !== JSON.stringify((remoto && remoto.anexos) || {}) ||
         (remoto && remoto.pastaAnexos) !== pasta.anexos ||
         JSON.stringify(excluidosPodados) !== JSON.stringify((remoto && remoto.excluidos) || {}) ||
@@ -346,6 +351,7 @@ const Sync = (() => {
           projetos: finais,
           excluidos: excluidosPodados,
           android: (remoto && remoto.android) || (noAndroid ? new Date().toISOString() : undefined),
+          desde: desde || undefined,
         };
         await DriveSync.enviar(arquivo ? arquivo.id : null, documento);
         await aplicarProjetos(finais);

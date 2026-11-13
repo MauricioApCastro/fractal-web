@@ -1,32 +1,34 @@
-# Fractal - Planejador Visual (PWA)
+# Fractal — versão web (endereço antigo)
 
-Organizador visual em círculos para projetos, tarefas, notas e ideias, com anexos.
-(imagens, vídeos, links e arquivos).
+O Fractal é um organizador visual em círculos para projetos, tarefas, notas e
+ideias, com fluxogramas, metas, compromissos, anexos e sincronização opcional
+pelo Google Drive do próprio usuário. Desenvolvido pela **Mactecnology**.
 
-Acesse: **https://mauricioapcastro.github.io/fractal-web/**
+- Endereço oficial da versão web: **https://mactecnology.com.br/fractal/**.
+  Só abre para contas Google que já usaram o app Android.
+- Este repositório publica o **endereço antigo**,
+  https://mauricioapcastro.github.io/fractal-web/. Ele continua funcionando e
+  mostra um aviso do endereço novo.
+- Aplicativo Android: `com.mactecnology.fractal` (Google Play).
+- Política de privacidade: https://mactecnology.com.br/fractal/privacidade.html
 
-## Como usar
+## Não edite aqui
 
-- **Instalar**: no navegador (desktop ou celular), use "Adicionar à tela inicial"
-  / "Instalar aplicativo". Funciona offline.
-- **Projetos**: ficam salvos no navegador (IndexedDB). Use **Importar**/**Exportar**
-  para backup ou para levar para outro aparelho.
-- **Navegação visual**: use a rodinha do mouse para aplicar zoom e arraste a área para navegar quando estiver ampliada.
-- **Progresso**: abra o menu de um círculo para marcar ou reabrir um item como concluído.
-- **Metas**: crie uma meta pelo menu do centro, informe a duração em dias e registre o progresso com os botões `−1` e `+1`.
-- Os arquivos `.fractal` são compatíveis com o app de Windows (versão .NET MAUI).
+Os arquivos deste repositório são **gerados**. A fonte fica no repositório
+`fractal`, em `Fractal/Resources/Raw/web`, e é publicada nos dois endereços
+pelo script `publicar-site.ps1`, que também sobe a versão do cache:
 
-## Publicar alterações
-
-```sh
-git add .
-git commit -m "atualização"
-git push
+```powershell
+cd C:\FractalRepo\fractal
+.\publicar-site.ps1
 ```
-O GitHub Pages atualiza automaticamente em 1-2 minutos.
+
+Alterações feitas direto aqui são apagadas na próxima publicação. Só este
+README, o `.nojekyll` e o `CNAME` (se existir) são preservados.
 
 ## Estrutura
 
-- `index.html` / `css/` / `js/` — aplicativo
-- `manifest.json` + `sw.js` — PWA (instalação e offline)
-- `icons/` — ícones do app
+- `index.html`, `css/`, `js/`: o aplicativo
+- `manifest.json` e `sw.js`: instalação como app e uso offline
+- `icons/`: ícones
+- `privacidade.html`: política de privacidade
