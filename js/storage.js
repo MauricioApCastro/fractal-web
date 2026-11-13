@@ -85,8 +85,14 @@ const Storage = (() => {
  * Modelo de dados (formato interno, camelCase)
  *  Projeto: { id, nome, modificado, raiz }
  *  Miolo:   { nome, anotacoes, itens[], anexos[] }
- *  Item:    { nome, cor, concluido, miolo }
+ *  Item:    { nome, cor, concluido, miolo, tipo?, fluxo? }
  *  Anexo:   { id, nome, tipo, valor, adicionado, arquivo }
+ *
+ *  Item com tipo 'fluxo' guarda o desenho de um processo:
+ *  Fluxo:   { blocos[], ligacoes[] }
+ *  Bloco:   { id, forma, texto, x, y, notas, responsavel, concluido, anexos[] }
+ *           forma: uma de FORMAS_FLUXO; x e y = centro.
+ *  Ligação: { id, de, para, rotulo }   (de e para = id do bloco)
  * ============================================================ */
 
 function novoMiolo(nome) {
@@ -114,6 +120,55 @@ function normalizarCompromisso(c) {
 
 function novoItem(nome, cor) {
   return { nome: nome, cor: cor || 0, concluido: false, miolo: novoMiolo(nome) };
+}
+
+/* ---------- fluxograma ---------- */
+/* Símbolos usuais de fluxograma. 'caso' é o ponto "Sim"/"Não" que sai de
+ * uma decisão; o resto é a forma clássica de cada símbolo. */
+const FORMAS_FLUXO = ['inicio', 'etapa', 'decisao', 'dados', 'documento', 'subprocesso', 'espera', 'fim', 'caso'];
+/* Formas que são trabalho a fazer: contam no progresso e podem ser concluídas. */
+const FORMAS_TRABALHO = ['etapa', 'decisao', 'dados', 'documento', 'subprocesso', 'espera'];
+
+function ehFluxo(item) {
+  return !!item && item.tipo === 'fluxo';
+}
+
+function novoBloco(forma, texto, x, y) {
+  return {
+    id: novoId(),
+    forma: FORMAS_FLUXO.includes(forma) ? forma : 'etapa',
+    texto: texto || '',
+    x: Number(x) || 0,
+    y: Number(y) || 0,
+    notas: '',
+    responsavel: '',
+    concluido: false,
+    anexos: [],
+  };
+}
+
+/* Um fluxo novo já vem com Início ligado ao Fim: mostra como funciona. */
+function novoFluxo() {
+  const inicio = novoBloco('inicio', 'Início', 0, 0);
+  const fim = novoBloco('fim', 'Fim', 0, 180);
+  return {
+    blocos: [inicio, fim],
+    ligacoes: [{ id: novoId(), de: inicio.id, para: fim.id, rotulo: '' }],
+  };
+}
+
+function novoItemFluxograma(nome, cor) {
+  const item = novoItem(nome, cor);
+  item.tipo = 'fluxo';
+  item.fluxo = novoFluxo();
+  return item;
+}
+
+/* Etapas, decisões e afins contam como trabalho; Início, Fim e os pontos
+ * Sim/Não não. */
+function progressoFluxo(fluxo) {
+  const blocos = (fluxo && fluxo.blocos || []).filter(b => FORMAS_TRABALHO.includes(b.forma));
+  return { total: blocos.length, feitos: blocos.filter(b => b.concluido === true).length };
 }
 
 function metaDoJson(d) {
@@ -179,7 +234,7 @@ function mioloDoJson(d) {
     const cor = Number.isFinite(corBruta) ? Math.trunc(corBruta) : i % 10;
     const pNome = textoDoJson(p.nome != null ? p.nome : p.Nome, 'Sem nome');
     const pMiolo = p.miolo || p.Miolo;
-    return {
+    const item = {
       nome: pNome,
       cor: cor,
       concluido: p.concluido === true || p.Concluido === true || p.feito === true || p.Feito === true,
@@ -189,22 +244,107 @@ function mioloDoJson(d) {
       anotacoes: textoDoJson(p.anotacoes != null ? p.anotacoes : p.Anotacoes, ''),
       miolo: pMiolo ? mioloDoJson(pMiolo) : novoMiolo(pNome),
     };
+    if ((p.tipo != null ? p.tipo : p.Tipo) === 'fluxo') {
+      item.tipo = 'fluxo';
+      item.fluxo = fluxoDoJson(p.fluxo || p.Fluxo, true);
+    }
+    return item;
   });
 
-  miolo.anexos = anexosSrc.map(a => {
-    const tipo = a.tipo != null ? a.tipo : a.Tipo;
-    const valor = textoDoJson(a.valor != null ? a.valor : a.Valor, '');
+  miolo.anexos = anexosSrc.map(anexoDoJson);
+
+  return miolo;
+}
+
+/* Anexo vindo de um arquivo importado: ganha id novo neste aparelho. */
+function anexoDoJson(a) {
+  const tipo = a.tipo != null ? a.tipo : a.Tipo;
+  const valor = textoDoJson(a.valor != null ? a.valor : a.Valor, '');
+  return {
+    id: novoId(),
+    nome: textoDoJson(a.nome != null ? a.nome : a.Nome, ''),
+    tipo: TIPOS_ANEXO.includes(tipo) ? tipo : 'link',
+    valor: valor,
+    adicionado: textoDoJson(a.adicionado || a.Adicionado, new Date().toISOString()),
+    arquivo: !ehLink(valor),
+  };
+}
+
+function campoDoJson(o, interno, exportado) {
+  return o[interno] != null ? o[interno] : o[exportado];
+}
+
+function coordenadaDoJson(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(-100000, Math.min(100000, n)) : 0;
+}
+
+/* Lê um fluxo do formato interno ou do exportado (PascalCase) e descarta o
+ * que não faz sentido: forma desconhecida, ligação para bloco que não existe,
+ * ligação repetida ou de um bloco para ele mesmo. Com importado=true os
+ * anexos ganham id novo, como os do miolo; senão ficam como estão. */
+function fluxoDoJson(d, importado) {
+  const origem = d && typeof d === 'object' ? d : {};
+  const ids = new Set();
+  const blocos = listaDoJson(campoDoJson(origem, 'blocos', 'Blocos')).map(b => {
+    let id = textoDoJson(campoDoJson(b, 'id', 'Id'), '');
+    if (!id || ids.has(id)) id = novoId();
+    ids.add(id);
+    const forma = campoDoJson(b, 'forma', 'Forma');
+    const anexos = listaDoJson(campoDoJson(b, 'anexos', 'Anexos'));
     return {
-      id: novoId(),
-      nome: textoDoJson(a.nome != null ? a.nome : a.Nome, ''),
-      tipo: TIPOS_ANEXO.includes(tipo) ? tipo : 'link',
-      valor: valor,
-      adicionado: textoDoJson(a.adicionado || a.Adicionado, new Date().toISOString()),
-      arquivo: !ehLink(valor),
+      id,
+      forma: FORMAS_FLUXO.includes(forma) ? forma : 'etapa',
+      texto: textoDoJson(campoDoJson(b, 'texto', 'Texto'), ''),
+      x: coordenadaDoJson(campoDoJson(b, 'x', 'X')),
+      y: coordenadaDoJson(campoDoJson(b, 'y', 'Y')),
+      notas: textoDoJson(campoDoJson(b, 'notas', 'Notas'), ''),
+      responsavel: textoDoJson(campoDoJson(b, 'responsavel', 'Responsavel'), ''),
+      concluido: campoDoJson(b, 'concluido', 'Concluido') === true,
+      anexos: importado ? anexos.map(anexoDoJson) : anexos,
     };
   });
 
-  return miolo;
+  const pares = new Set();
+  const ligacoes = [];
+  listaDoJson(campoDoJson(origem, 'ligacoes', 'Ligacoes')).forEach(l => {
+    const de = textoDoJson(campoDoJson(l, 'de', 'De'), '');
+    const para = textoDoJson(campoDoJson(l, 'para', 'Para'), '');
+    const par = de + '>' + para;
+    if (!ids.has(de) || !ids.has(para) || de === para || pares.has(par)) return;
+    pares.add(par);
+    ligacoes.push({
+      id: textoDoJson(campoDoJson(l, 'id', 'Id'), '') || novoId(),
+      de,
+      para,
+      rotulo: textoDoJson(campoDoJson(l, 'rotulo', 'Rotulo'), '').slice(0, 40),
+    });
+  });
+
+  return { blocos, ligacoes };
+}
+
+function fluxoParaJson(f) {
+  const fluxo = f || { blocos: [], ligacoes: [] };
+  return {
+    Blocos: (fluxo.blocos || []).map(b => ({
+      Id: b.id,
+      Forma: b.forma,
+      Texto: b.texto || '',
+      X: b.x,
+      Y: b.y,
+      Notas: b.notas || '',
+      Responsavel: b.responsavel || '',
+      Concluido: b.concluido === true,
+      Anexos: (b.anexos || []).map(anexoParaJson),
+    })),
+    Ligacoes: (fluxo.ligacoes || []).map(l => ({
+      Id: l.id,
+      De: l.de,
+      Para: l.para,
+      Rotulo: l.rotulo || '',
+    })),
+  };
 }
 
 function compatibilizarMiolo(m) {
@@ -215,8 +355,20 @@ function compatibilizarMiolo(m) {
   return m;
 }
 
+/* Garante um fluxo válido em todo item do tipo fluxo, em qualquer nível. */
+function compatibilizarFluxos(miolo) {
+  if (!miolo || !Array.isArray(miolo.itens)) return;
+  miolo.itens.forEach(item => {
+    if (ehFluxo(item)) item.fluxo = fluxoDoJson(item.fluxo, false);
+    if (item && item.miolo) compatibilizarFluxos(item.miolo);
+  });
+}
+
 function compatibilizarProjeto(projeto) {
-  if (projeto && projeto.raiz) compatibilizarMiolo(projeto.raiz);
+  if (projeto && projeto.raiz) {
+    compatibilizarMiolo(projeto.raiz);
+    compatibilizarFluxos(projeto.raiz);
+  }
   return projeto;
 }
 
@@ -241,25 +393,47 @@ function mioloParaJson(m) {
         Tipo: p.meta.tipo || '',
       } : null,
       Compromisso: normalizarCompromisso(p.compromisso),
+      // undefined some do JSON: item comum continua igual ao do desktop.
+      Tipo: ehFluxo(p) ? 'fluxo' : undefined,
+      Fluxo: ehFluxo(p) ? fluxoParaJson(p.fluxo) : undefined,
       Miolo: p.miolo ? mioloParaJson(p.miolo) : null,
     })),
-    Anexos: (m.anexos || []).map(a => ({
-      Nome: a.nome,
-      Tipo: a.tipo,
-      Valor: a.valor,
-      Adicionado: a.adicionado,
-    })),
+    Anexos: (m.anexos || []).map(anexoParaJson),
   };
+}
+
+function anexoParaJson(a) {
+  return {
+    Nome: a.nome,
+    Tipo: a.tipo,
+    Valor: a.valor,
+    Adicionado: a.adicionado,
+  };
+}
+
+/* Todos os anexos de uma árvore de miolos: os de cada miolo e os de cada
+ * bloco de fluxograma, em qualquer nível. É o único lugar que sabe onde os
+ * anexos moram; backup, importação, contagem e sincronização usam esta
+ * lista. Devolve [{ dono, a }], onde dono é o miolo ou o bloco. */
+function anexosDaArvore(miolo) {
+  const lista = [];
+  (function andar(m) {
+    if (!m) return;
+    (m.anexos || []).forEach(a => lista.push({ dono: m, a }));
+    (m.itens || []).forEach(i => {
+      if (!i) return;
+      if (i.fluxo && Array.isArray(i.fluxo.blocos)) {
+        i.fluxo.blocos.forEach(b => (b.anexos || []).forEach(a => lista.push({ dono: b, a })));
+      }
+      if (i.miolo) andar(i.miolo);
+    });
+  })(miolo);
+  return lista;
 }
 
 /* Percorre todos os anexos de uma árvore de miolos. */
 function percorrerAnexos(miolo, acao) {
-  const lista = [];
-  (function andar(m) {
-    (m.anexos || []).forEach(a => lista.push({ m, a }));
-    (m.itens || []).forEach(i => { if (i.miolo) andar(i.miolo); });
-  })(miolo);
-  return Promise.all(lista.map(({ m, a }) => acao(m, a)));
+  return Promise.all(anexosDaArvore(miolo).map(({ dono, a }) => acao(dono, a)));
 }
 
 function ehLink(valor) {
@@ -352,9 +526,7 @@ function totalItens(miolo) {
 }
 
 function totalAnexos(miolo) {
-  let t = miolo.anexos.length;
-  miolo.itens.forEach(i => { if (i.miolo) t += totalAnexos(i.miolo); });
-  return t;
+  return anexosDaArvore(miolo).length;
 }
 
 /* ---------- paleta de cores (igual ao desktop) ---------- */
@@ -399,6 +571,6 @@ function registrarServiceWorker() {
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
   } catch (err) { /* segue o fluxo normal */ }
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=19', { updateViaCache: 'none' }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=21', { updateViaCache: 'none' }).catch(() => {});
   });
 }

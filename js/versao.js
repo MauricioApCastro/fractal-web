@@ -5,4 +5,4 @@
  * ApplicationDisplayVersion do Fractal.csproj, de modo que o rodape
  * do app e o versionName da Play Store nunca divirjam.
  * ============================================================ */
-const VERSAO_RELEASE = '1.4';
+const VERSAO_RELEASE = '1.5';

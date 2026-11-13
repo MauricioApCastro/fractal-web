@@ -120,7 +120,9 @@ const Conta = (() => {
 
     /* Botão oficial do Google (apenas na web). */
     const alvo = $id('conta-google');
-    if (alvo && !googleRenderizado) {
+    /* Com o portão do site fechado, o botão do Google é o do portão. */
+    const portaoFechado = document.documentElement.dataset.portao === 'fechado';
+    if (alvo && !googleRenderizado && !portaoFechado) {
       if (GoogleAuth.temWebClient()) {
         try {
           googleRenderizado = true;

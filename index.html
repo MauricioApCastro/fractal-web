@@ -9,13 +9,53 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Fractal">
-  <link rel="manifest" href="manifest.json?v=19">
+  <link rel="manifest" href="manifest.json?v=21">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <title>Fractal - Planejador Visual</title>
-  <link rel="stylesheet" href="css/styles.css?v=19">
+  <link rel="stylesheet" href="css/styles.css?v=21">
+  <!-- Portão: no mactecnology.com.br o app só abre para contas que já
+       usaram o Fractal no Android (js/portao.js). Fecha antes do primeiro
+       desenho para a lista não piscar. ?portao força o portão (testes). -->
+  <script>
+    if (/(^|\.)mactecnology\.com\.br$/.test(location.hostname) || /[?&]portao(=|&|$)/.test(location.search)) {
+      document.documentElement.dataset.portao = 'fechado';
+    }
+  </script>
 </head>
 <body>
+
+  <!-- ============ PORTÃO (só no mactecnology.com.br) ============ -->
+  <section id="portao" class="portao" aria-live="polite">
+    <div class="portao-caixa">
+      <div class="brand-fractal portao-logo"></div>
+      <h1 class="portao-titulo">Fractal no computador</h1>
+      <p class="conta-texto">
+        A versão web do Fractal é para quem já usa o app no Android.
+        Entre com a mesma conta Google do app para ver seus projetos aqui.
+      </p>
+      <div id="portao-entrar">
+        <div id="portao-google" class="conta-google"></div>
+      </div>
+      <p id="portao-verificando" class="portao-verificando" hidden></p>
+      <p id="portao-mensagem" class="conta-mensagem"></p>
+      <div id="portao-negado" hidden>
+        <div class="conta-botoes">
+          <a class="btn btn-primario" id="portao-play" href="#" target="_blank" rel="noopener">Baixar no Google Play</a>
+          <button class="btn btn-secundario" id="portao-outra">Usar outra conta</button>
+        </div>
+      </div>
+      <p class="portao-rodape">
+        <a href="../">Mactecnology</a> · <a href="privacidade.html">Política de Privacidade</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Aviso no endereço antigo (mauricioapcastro.github.io/fractal-web). -->
+  <div id="aviso-endereco" class="aviso-endereco" hidden>
+    <span>O Fractal agora fica em <a href="#" target="_blank" rel="noopener"></a> (para quem usa o app Android).</span>
+    <button class="btn-icon" id="aviso-endereco-fechar" aria-label="Fechar aviso">&#215;</button>
+  </div>
 
   <!-- ============ TELA: LISTA DE PROJETOS ============ -->
   <section id="tela-lista" class="tela ativa">
@@ -86,6 +126,24 @@
       <button id="meta-concluir" class="meta-btn meta-concluir" aria-label="Concluir meta" title="Concluir meta">✓</button>
     </div>
     <button class="fab" id="btn-novo-item" aria-label="Novo item">+</button>
+  </section>
+
+  <!-- ============ TELA: FLUXOGRAMA ============ -->
+  <section id="tela-fluxo" class="tela">
+    <header class="topbar">
+      <button class="btn-icon" id="fluxo-voltar" title="Voltar" aria-label="Voltar">&#8592;</button>
+      <div class="breadcrumb" id="fluxo-titulo"></div>
+      <div class="acoes-topo">
+        <button class="btn-icon" id="fluxo-desfazer" title="Desfazer" aria-label="Desfazer" disabled>&#8630;</button>
+        <button class="btn-icon" id="fluxo-refazer" title="Refazer" aria-label="Refazer" disabled>&#8631;</button>
+        <button class="btn-icon" id="fluxo-mais" title="Mais opções" aria-label="Mais opções">&#8943;</button>
+      </div>
+    </header>
+    <div class="fluxo-canvas" id="fluxo-canvas">
+      <svg id="fluxo-svg" xmlns="http://www.w3.org/2000/svg" aria-label="Fluxograma"></svg>
+      <p class="fluxo-aviso" id="fluxo-aviso" hidden></p>
+    </div>
+    <button class="fab" id="fluxo-novo" aria-label="Adicionar bloco depois do destacado">+</button>
   </section>
 
   <!-- ============ TELA: ANEXOS ============ -->
@@ -181,6 +239,15 @@
         </div>
       </div>
 
+      <div class="conta-cartao" id="conta-computador" hidden>
+        <h2 class="conta-titulo">Usar no computador</h2>
+        <p class="conta-texto">
+          Abra no navegador do computador e entre com esta mesma conta Google:
+          seus projetos aparecem lá, sincronizados pelo Drive.
+        </p>
+        <p class="conta-texto"><a id="conta-computador-link" class="conta-link" href="#"></a></p>
+      </div>
+
       <div class="conta-cartao" id="conta-dados">
         <h2 class="conta-titulo">Seus dados</h2>
         <p class="conta-texto">
@@ -267,15 +334,17 @@
     };
   </script>
 
-  <script src="js/versao.js?v=19"></script>
-  <script src="js/storage.js?v=19"></script>
-  <script src="js/app.js?v=19"></script>
-  <script src="js/config.js?v=19"></script>
-  <script src="js/google-auth.js?v=19"></script>
-  <script src="js/drive-sync.js?v=19"></script>
-  <script src="js/sync.js?v=19"></script>
-  <script src="js/conta.js?v=19"></script>
-  <script src="js/tutorial.js?v=19"></script>
-  <script src="js/lembrete.js?v=19"></script>
+  <script src="js/versao.js?v=21"></script>
+  <script src="js/storage.js?v=21"></script>
+  <script src="js/app.js?v=21"></script>
+  <script src="js/config.js?v=21"></script>
+  <script src="js/google-auth.js?v=21"></script>
+  <script src="js/drive-sync.js?v=21"></script>
+  <script src="js/sync.js?v=21"></script>
+  <script src="js/conta.js?v=21"></script>
+  <script src="js/tutorial.js?v=21"></script>
+  <script src="js/lembrete.js?v=21"></script>
+  <script src="js/fluxo.js?v=21"></script>
+  <script src="js/portao.js?v=21"></script>
 </body>
 </html>

@@ -147,14 +147,11 @@ const Sync = (() => {
     const mapa = new Map();
     (projetos || []).forEach(p => {
       if (!p || !p.raiz) return;
-      (function andar(miolo) {
-        if (!miolo) return;
-        (miolo.anexos || []).forEach(a => {
-          if (!a || !a.id || !a.arquivo) return;
-          if (!mapa.has(a.id)) mapa.set(a.id, a);
-        });
-        (miolo.itens || []).forEach(i => { if (i.miolo) andar(i.miolo); });
-      })(p.raiz);
+      // anexosDaArvore (storage.js) inclui os anexos dos blocos de fluxograma.
+      anexosDaArvore(p.raiz).forEach(({ a }) => {
+        if (!a || !a.id || !a.arquivo) return;
+        if (!mapa.has(a.id)) mapa.set(a.id, a);
+      });
     });
     return mapa;
   }
@@ -182,6 +179,8 @@ const Sync = (() => {
 
   async function sincronizar(forcar) {
     if (rodando || destruindo) return status();
+    /* Portão do site fechado (conta ainda não liberada): não mexe no Drive. */
+    if (document.documentElement.dataset.portao === 'fechado') return status();
     if (!GoogleAuth.logado()) {
       definir('local', 'Entre com o Google para sincronizar.');
       return status();
@@ -327,10 +326,14 @@ const Sync = (() => {
 
       /* --- cota do Drive (o aviso de "quase cheio" já foi dado acima) --- */
 
+      /* Marca que esta conta já usou o app Android: é o que libera a versão
+         web no mactecnology.com.br (ver portao.js). A marca nunca sai. */
+      const noAndroid = GoogleAuth.temPonteNativa();
       const mudou = !remoto || !iguais(finais, projetosRemotos) ||
         JSON.stringify(indice) !== JSON.stringify((remoto && remoto.anexos) || {}) ||
         (remoto && remoto.pastaAnexos) !== pasta.anexos ||
-        JSON.stringify(excluidosPodados) !== JSON.stringify((remoto && remoto.excluidos) || {});
+        JSON.stringify(excluidosPodados) !== JSON.stringify((remoto && remoto.excluidos) || {}) ||
+        (noAndroid && !(remoto && remoto.android));
 
       if (mudou) {
         const documento = {
@@ -342,6 +345,7 @@ const Sync = (() => {
           anexos: indice,
           projetos: finais,
           excluidos: excluidosPodados,
+          android: (remoto && remoto.android) || (noAndroid ? new Date().toISOString() : undefined),
         };
         await DriveSync.enviar(arquivo ? arquivo.id : null, documento);
         await aplicarProjetos(finais);

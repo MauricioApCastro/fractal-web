@@ -45,6 +45,15 @@ const FractalConfig = {
     avisoCota: 0.8,
   },
 
+  site: {
+    // Versão web oficial. Só abre para contas que já usaram o app
+    // Android (ver portao.js e o script do <head> do index.html).
+    web: 'https://mactecnology.com.br/fractal/',
+    // Endereço antigo do site: continua funcionando, com um aviso.
+    antigo: 'mauricioapcastro.github.io',
+    play: 'https://play.google.com/store/apps/details?id=com.mactecnology.fractal',
+  },
+
   sync: {
     // Espera antes de enviar as alterações para o Drive (debounce).
     esperaMs: 4000,

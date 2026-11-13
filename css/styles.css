@@ -891,6 +891,12 @@ textarea.campo { min-height: 110px; resize: vertical; }
   color: var(--texto);
 }
 .sheet-opcao:last-child { border-bottom: none; }
+.sheet-descricao {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--texto-fraco);
+}
 .sheet-opcao.sucesso { color: #6EE7B7; }
 .sheet-opcao.danger { color: #FF7B7B; }
 #sheet-fechar {
@@ -1153,3 +1159,149 @@ textarea.campo { min-height: 110px; resize: vertical; }
    apagado, porque a conta continua ativa e volta no mês seguinte. */
 .item.concluido.conta-paga { filter: none; }
 .item.concluido.conta-paga .nome-fractal { text-decoration: none; }
+
+/* ============ FLUXOGRAMA ============ */
+.sheet-opcoes { max-height: 62vh; overflow-y: auto; overscroll-behavior: contain; }
+
+.fluxo-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  /* Grade de pontos; o fluxo.js ajusta tamanho e posição ao zoom e ao pan. */
+  background-image: radial-gradient(rgba(139, 152, 168, 0.22) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+#fluxo-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+.fluxo-bloco, .fluxo-ligacao { cursor: pointer; }
+
+/* Aviso do modo "Ligar", no alto do desenho. */
+.fluxo-aviso {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92%, 420px);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--dourado-b);
+  background: rgba(11, 16, 32, 0.94);
+  color: var(--dourado-a);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+}
+.fluxo-aviso[hidden] { display: none; }
+
+#tela-fluxo .btn-icon:disabled { opacity: 0.35; }
+
+/* Grade do botão +: os símbolos e, embaixo, as ligações. */
+.fluxo-simbolos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+.fluxo-simbolos-ligar {
+  padding-top: 10px;
+  border-top: 1px solid var(--borda);
+}
+.fluxo-ferramenta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 6px 8px;
+  border-radius: 12px;
+  background: var(--fundo);
+  border: 1px solid var(--borda);
+  color: var(--texto);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+.fluxo-ferramenta small { font-size: 10px; font-weight: 400; color: var(--texto-fraco); line-height: 1.25; }
+.fluxo-ferramenta:active { filter: brightness(1.3); }
+.fluxo-ferramenta svg { width: 40px; height: 24px; margin-bottom: 2px; }
+.fluxo-ferramenta svg .forma { fill: var(--cartao); stroke: var(--dourado-a); stroke-width: 1.6; stroke-linejoin: round; }
+.fluxo-ferramenta svg .cheio { fill: var(--dourado-a); stroke: var(--dourado-b); stroke-width: 1.2; }
+.fluxo-ferramenta svg .linha { fill: none; stroke: var(--dourado-a); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.fluxo-check {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px !important;
+  font-size: 14px !important;
+  color: var(--texto) !important;
+}
+.fluxo-check input { width: 18px; height: 18px; accent-color: var(--verde); }
+
+/* ============ PORTÃO (mactecnology.com.br) ============ */
+.portao { display: none; }
+html[data-portao="fechado"] body > :not(#portao):not(#toast) { display: none !important; }
+html[data-portao="fechado"] .portao {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  background: radial-gradient(circle at 50% 30%, #18213d 0%, var(--fundo) 70%);
+}
+.portao-caixa {
+  width: 100%;
+  max-width: 420px;
+  background: var(--cartao);
+  border: 1px solid var(--borda);
+  border-radius: 18px;
+  padding: 28px 22px 18px;
+  text-align: center;
+}
+.portao-logo { width: 64px; height: 64px; margin: 0 auto 14px; }
+.portao-titulo { margin: 0 0 10px; font-size: 22px; font-weight: 700; }
+.portao .conta-google { justify-content: center; margin: 6px 0 4px; }
+.portao .conta-botoes { justify-content: center; }
+.portao .conta-botoes .btn { text-decoration: none; display: inline-block; }
+.portao-verificando { color: var(--texto-fraco); font-size: 14px; }
+.portao .conta-mensagem { min-height: 0; }
+.portao-rodape { margin: 20px 0 0; font-size: 12px; color: var(--texto-fraco); }
+.portao-rodape a { color: var(--texto-fraco); }
+
+.aviso-endereco {
+  position: fixed;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: calc(100% - 32px);
+  max-width: 560px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 14px;
+  background: var(--cartao);
+  border: 1px solid var(--dourado-b);
+  font-size: 13px;
+  color: var(--texto);
+}
+.aviso-endereco[hidden] { display: none; }
+.aviso-endereco span { flex: 1; }
+.aviso-endereco a, .conta-link { color: var(--dourado-a); font-weight: 600; word-break: break-all; }
+.portao #portao-negado { margin-top: 14px; }

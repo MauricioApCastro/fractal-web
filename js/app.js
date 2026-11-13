@@ -17,8 +17,9 @@ const Estado = {
   atual: null,        // projeto em uso
   caminho: [],        // pilha de miolos (raiz primeiro)
   itemPai: null,      // item que originou o miolo atual
-  anexosDe: null,     // miolo cujos anexos estão abertos
+  anexosDe: null,     // miolo (ou bloco de fluxograma) cujos anexos estão abertos
   anexosTitulo: '',
+  anexosVolta: null,  // 'fluxo' quando os anexos são de um bloco
   tela: 'lista',
   larguraCanvas: 208,
   alturaCanvas: 208,
@@ -181,6 +182,8 @@ function irParaFlor(projeto) {
 }
 
 function entrarItem(item) {
+  // Fluxograma: em vez de outra flor, abre o editor do processo.
+  if (ehFluxo(item)) { Fluxo.abrir(item); return; }
   if (!item.miolo) item.miolo = novoMiolo(item.nome);
   Estado.caminho.push(item.miolo);
   Estado.itemPai = item;
@@ -228,10 +231,10 @@ function tratarVoltar() {
     return true;
   }
   if (Estado.tela === 'anexos') {
-    mostrarTela('flor');
-    renderizarFlor();
+    voltarDosAnexos();
     return true;
   }
+  if (Estado.tela === 'fluxo') return Fluxo.voltar();
   if (Estado.tela === 'flor') { voltar(); return true; }
   return false;
 }
@@ -736,10 +739,13 @@ function renderizarFlor() {
 
     // Meta tem cor padrão (dourado da marca); item comum usa a paleta.
     const [ca, cb] = meta ? COR_MIOLO : corDoItem(item.cor);
-    const agregado = progressoAgregado(item);
+    const fluxoItem = ehFluxo(item);
+    const progressoDoFluxo = fluxoItem ? progressoFluxo(item.fluxo) : null;
+    const agregado = fluxoItem ? null : progressoAgregado(item);
     const el = document.createElement('div');
     el.className = 'item';
     if (meta) el.classList.add('meta');
+    if (fluxoItem) el.classList.add('fluxo');
     if (agregado) el.classList.add('tem-metas');
     if (concluido) el.classList.add('concluido');
     if (contaPagaNoMes(item)) el.classList.add('conta-paga');
@@ -747,6 +753,12 @@ function renderizarFlor() {
     el.style.left = x + 'px';
     el.style.top = y + 'px';
     if (meta) el.style.setProperty('--progresso-meta', (meta.progresso / meta.dias * 100) + '%');
+    else if (fluxoItem) {
+      // O anel do fluxograma mostra as etapas concluídas.
+      const parte = concluido ? 1
+        : progressoDoFluxo.total ? progressoDoFluxo.feitos / progressoDoFluxo.total : 0;
+      el.style.setProperty('--progresso-meta', (parte * 100) + '%');
+    }
     else if (agregado) el.style.setProperty('--progresso-meta', (agregado.progresso / agregado.dias * 100) + '%');
     else if (concluido) el.style.setProperty('--progresso-meta', '100%');
     else if (item.miolo && item.miolo.itens.length > 0) {
@@ -761,10 +773,12 @@ function renderizarFlor() {
     el.appendChild(nome);
 
     const compromisso = normalizarCompromisso(item.compromisso);
-    if (meta || compromisso) {
+    if (meta || compromisso || fluxoItem) {
       const etiquetaMeta = document.createElement('span');
       etiquetaMeta.className = 'etiqueta-meta';
-      etiquetaMeta.textContent = meta ? 'META' : (compromisso.repetir === 'mensal' ? 'CONTA' : 'COMPROMISSO');
+      etiquetaMeta.textContent = meta ? 'META'
+        : compromisso ? (compromisso.repetir === 'mensal' ? 'CONTA' : 'COMPROMISSO')
+          : 'FLUXO';
       el.appendChild(etiquetaMeta);
     }
 
@@ -781,7 +795,9 @@ function renderizarFlor() {
      * anotações do item. O anel continua mostrando o progresso. */
     const subTxt = compromisso ? textoCompromisso(compromisso)
       : meta ? textoFaltamMeta(meta)
-        : resumoNotas(item.anotacoes || (item.miolo ? item.miolo.anotacoes : ''));
+        : progressoDoFluxo && progressoDoFluxo.total
+          ? progressoDoFluxo.feitos + '/' + progressoDoFluxo.total + ' etapas'
+          : resumoNotas(item.anotacoes || (item.miolo ? item.miolo.anotacoes : ''));
     if (subTxt) {
       const sub = document.createElement('div');
       sub.className = 'sub-fractal';
@@ -1233,9 +1249,12 @@ function mostrarOpcoesItem(item) {
             },
           });
 
-  mostrarSheet('Item: ' + nome, [
+  // No fluxograma os anexos ficam nos blocos, e meta/compromisso não se aplicam.
+  const fluxoItem = ehFluxo(item);
+  mostrarSheet((fluxoItem ? 'Fluxograma: ' : 'Item: ') + nome, [
+    fluxoItem ? { texto: 'Abrir fluxograma', acao: () => Fluxo.abrir(item) } : null,
     {
-      texto: 'Editar item',
+      texto: fluxoItem ? 'Editar nome e anotações' : 'Editar item',
       acao: () => editar('Editar item', item.nome, item.anotacoes || '', (n, notas) => {
         item.nome = n;
         if (item.miolo) item.miolo.nome = n;
@@ -1246,9 +1265,9 @@ function mostrarOpcoesItem(item) {
         renderizarFlor();
       }),
     },
-    { texto: 'Anexos', acao: () => abrirAnexos(item) },
-    opcaoMetaFinal,
-    opcaoCompromisso,
+    fluxoItem ? null : { texto: 'Anexos', acao: () => abrirAnexos(item) },
+    fluxoItem ? null : opcaoMetaFinal,
+    fluxoItem ? null : opcaoCompromisso,
     compromisso && compromisso.repetir === 'mensal' ? (() => {
       const venc = vencimentoPendente(compromisso);
       const pagaEsteMes = compromisso.pagoAte && compromisso.pagoAte >= mesDe(new Date());
@@ -1356,10 +1375,32 @@ document.addEventListener('change', e => {
   }
 });
 
+/* Botão +: o usuário escolhe o tipo antes de dar o nome. */
 function novoItemFluxo() {
-  prompt('Novo item', 'Nome do item:', '', '', nome => {
-    const miolo = mioloAtual();
-    miolo.itens.push(novoItem(nome.trim(), miolo.itens.length));
+  mostrarSheet('Novo', [
+    {
+      texto: 'Item',
+      descricao: 'Um círculo que pode ter outros dentro dele',
+      acao: () => criarItemComNome('Novo item', 'Nome do item:', nome => novoItem(nome, mioloAtual().itens.length)),
+    },
+    {
+      texto: 'Meta',
+      descricao: 'Progresso por dias, com prazo ou contagem',
+      cor: 'sucesso',
+      acao: novaMetaFluxo,
+    },
+    {
+      texto: 'Fluxograma',
+      descricao: 'O passo a passo de um processo, em blocos e setas',
+      acao: () => criarItemComNome('Novo fluxograma', 'Nome do processo:', nome =>
+        novoItemFluxograma(nome, mioloAtual().itens.length)),
+    },
+  ]);
+}
+
+function criarItemComNome(titulo, rotulo, fabricar) {
+  prompt(titulo, rotulo, '', '', nome => {
+    mioloAtual().itens.push(fabricar(nome.trim()));
     guardar();
     renderizarFlor();
   });
@@ -1373,8 +1414,19 @@ function abrirAnexos(item) {
   const miolo = item ? (item.miolo || (item.miolo = novoMiolo(item.nome))) : mioloAtual();
   Estado.anexosDe = miolo;
   Estado.anexosTitulo = (item ? (item.nome || 'Item') : (miolo.nome || 'Centro'));
+  Estado.anexosVolta = null;
   mostrarTela('anexos');
   renderizarAnexos();
+}
+
+function voltarDosAnexos() {
+  const paraFluxo = Estado.anexosVolta === 'fluxo';
+  Estado.anexosVolta = null;
+  Estado.anexosDe = null;
+  soltarMiniaturas();
+  if (paraFluxo) { Fluxo.reabrir(); return; }
+  mostrarTela('flor');
+  renderizarFlor();
 }
 
 const ICONES_ANEXO = {
@@ -1678,6 +1730,12 @@ function mostrarSheet(titulo, opcoes) {
     b.className = 'sheet-opcao' +
       (op.cor === 'danger' ? ' danger' : op.cor === 'sucesso' ? ' sucesso' : '');
     b.textContent = op.texto;
+    if (op.descricao) {
+      const d = document.createElement('small');
+      d.className = 'sheet-descricao';
+      d.textContent = op.descricao;
+      b.appendChild(d);
+    }
     b.addEventListener('click', () => {
       fecharSheet();
       op.acao();
@@ -1780,10 +1838,7 @@ function wire() {
     await guardar();
     toast('Guardado.');
   });
-  $('#btn-anexos-voltar').addEventListener('click', () => {
-    mostrarTela('flor');
-    renderizarFlor();
-  });
+  $('#btn-anexos-voltar').addEventListener('click', voltarDosAnexos);
 
   const canvasFlor = $('#flor-canvas');
   let arrasto = null;
